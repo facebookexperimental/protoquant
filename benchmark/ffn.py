@@ -28,12 +28,12 @@ class FFN(torch.nn.Module):
         self.linear2 = torch.nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
     def forward(self, x):
-        # print("x.size(): ", x.size())
-        # print("self.linear1.weight.size(): ", self.linear1.weight.size())
         x = self.linear1(x)
         x = self.activation(x)
         return self.linear2(x)
 
+def use_int8_weight(module: torch.fx.GraphModule) -> torch.fx.GraphModule:
+    pass
 
 def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     seq_len = 256

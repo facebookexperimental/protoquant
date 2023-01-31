@@ -22,6 +22,7 @@ def generate_square_subsequent_mask(sz: int) -> Tensor:
     """Generates an upper-triangular matrix of -inf, with zeros on diag."""
     return torch.triu(torch.ones(sz, sz) * float("-inf"), diagonal=1)
 
+
 def benchmark_torch_function_in_microseconds(f, *args, **kwargs):
     import torch.utils.benchmark as benchmark
     t0 = benchmark.Timer(
@@ -69,6 +70,7 @@ def data_process(raw_text_iter: dataset.IterableDataset, vocab, tokenizer) -> Te
     ]
     return torch.cat(tuple(filter(lambda t: t.numel() > 0, data)))
 
+
 def toy_data(num_tokens, d_model, dtype):
     return torch.rand((num_tokens, d_model), device=torch.device('cuda'), dtype=dtype)
 
@@ -102,8 +104,8 @@ def get_batch(source: Tensor, i: int, min_seq_len=35) -> Tuple[Tensor, Tensor]:
         target has shape [seq_len * batch_size]
     """
     seq_len = min(min_seq_len, len(source) - 1 - i)
-    data = source[i : i + seq_len]
-    target = source[i + 1 : i + 1 + seq_len].reshape(-1)
+    data = source[i: i + seq_len]
+    target = source[i + 1: i + 1 + seq_len].reshape(-1)
     return data, target
 
 
@@ -139,7 +141,8 @@ def main():
     nhead = 16  # number of heads in nn.MultiheadAttention
     dropout = 0  # 0..2  # dropout probability
     # model = TransformerModel(ntokens, emsize, nhead, d_hid, nlayers, dropout).to(device)
-    encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout, batch_first=True)
+    encoder_layers = TransformerEncoderLayer(
+        d_model, nhead, d_hid, dropout, batch_first=True)
     model = TransformerEncoder(encoder_layers, nlayers)
     model = model.to(device)
     train_seq_len = 1024
@@ -152,11 +155,10 @@ def main():
     kernel = SDPBackend.EFFICIENT_ATTENTION
 
     profile_path = f"/scratch/drisspg/work/scripts/data/profiles/xlmr_train_{kernel.name}_batch_size_"\
-    f"{batch_size}_d_hid{d_hid}_nlayers{nlayers}_nhead{nhead}_seq_len_{train_seq_len}.json"
+        f"{batch_size}_d_hid{d_hid}_nlayers{nlayers}_nhead{nhead}_seq_len_{train_seq_len}.json"
     # profile_path=None
 
     lr = 3  # learning rate
-
 
     val_data = batchify(val_data, eval_batch_size, device)
 
@@ -171,7 +173,8 @@ def main():
     if profile_path is not None:
         print(f"Saving profile to:{profile_path}")
     print(f"Using SDP backed by {kernel.name} ")
-    print(f"Eval time: {benchmark_torch_function_in_microseconds(model, val_data)}")
+    print(
+        f"Eval time: {benchmark_torch_function_in_microseconds(model, val_data)}")
 
 
 if __name__ == "__main__":
