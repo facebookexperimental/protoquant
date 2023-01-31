@@ -10,9 +10,6 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
-from torchtext.data.utils import get_tokenizer
-from torchtext.datasets import WikiText2
-from torchtext.vocab import build_vocab_from_iterator
 import logging
 from torch._dynamo import config
 
@@ -21,143 +18,16 @@ torch.set_float32_matmul_precision("high")
 # config.verbose = True
 
 
-class TransformerModel(nn.Module):
-    def __init__(
-        self,
-        ntoken: int,
-        d_model: int,
-        nhead: int,
-        d_hid: int,
-        nlayers: int,
-        dropout: float = 0.5,
-    ):
-        super().__init__()
-        self.model_type = "Transformer"
-        self.pos_encoder = PositionalEncoding(d_model, dropout)
-        encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout)
-        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-        self.encoder = nn.Embedding(ntoken, d_model)
-        self.d_model = d_model
-        self.decoder = nn.Linear(d_model, ntoken)
-
-        self.init_weights()
-
-    def init_weights(self) -> None:
-        initrange = 0.1
-        self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-initrange, initrange)
-
-    def forward(
-        self, src: Tensor, src_mask: Optional[Tensor] = None, causal_mask: bool = False
-    ) -> Tensor:
-        """
-        Args:
-            src: Tensor, shape [seq_len, batch_size]
-            src_mask: Tensor, shape [seq_len, seq_len]
-
-        Returns:
-            output Tensor of shape [seq_len, batch_size, ntoken]
-        """
-
-        src = self.encoder(src) * math.sqrt(self.d_model)
-        src = self.pos_encoder(src)
-        output = self.transformer_encoder(src, src_mask)
-        output = self.decoder(output)
-        return output
-
-
 def generate_square_subsequent_mask(sz: int) -> Tensor:
     """Generates an upper-triangular matrix of -inf, with zeros on diag."""
     return torch.triu(torch.ones(sz, sz) * float("-inf"), diagonal=1)
 
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
-        )
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        Args:
-            x: Tensor, shape [seq_len, batch_size, embedding_dim]
-        """
-        x = x + self.pe[: x.size(0)]
-        return self.dropout(x)
-
-
-def train_step(model, data, targets, optimizer, criterion, ntokens):
-    # Zero_grads
-    optimizer.zero_grad()
-    output = model(data, causal_mask=True)
-    loss = criterion(output.view(-1, ntokens), targets)
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-    optimizer.step()
-    return loss
-
-
-def train(
-    model: nn.Module,
-    train_data,
-    train_seq_len,
-    device,
-    ntokens,
-    criterion,
-    optimizer,
-    scheduler,
-    epoch,
-    profile_path=None,
-) -> None:
-    model.train()  # turn on train mode
-    total_loss = 0.0
-    log_interval = 15
-    start_time = time.time()
-    src_mask = generate_square_subsequent_mask(train_seq_len).to(device)
-    activities = [
-        torch.profiler.ProfilerActivity.CPU,
-        torch.profiler.ProfilerActivity.CUDA,
-    ]
-    num_batches = len(train_data) // train_seq_len
-    for batch, i in enumerate(range(0, train_data.size(0) - 1, train_seq_len)):
-        data, targets = get_batch(train_data, i, train_seq_len)
-        seq_len = data.size(0)
-        if seq_len != train_seq_len:  # only on last batch
-            src_mask = src_mask[:seq_len, :seq_len]
-
-        if profile_path is not None and batch == 4:
-            with torch.profiler.profile(
-                activities=activities,
-                record_shapes=True,
-                with_stack=True,
-            ) as profiler:
-                loss = train_step(model, data, targets, optimizer, criterion, ntokens)
-            profiler.export_chrome_trace(profile_path)
-        else:
-            loss = train_step(model, data, targets, optimizer, criterion, ntokens)
-
-        total_loss += loss.item()
-        if batch % log_interval == 0 and batch > 0:
-            lr = scheduler.get_last_lr()[0]
-            ms_per_batch = (time.time() - start_time) * 1000 / log_interval
-            cur_loss = total_loss / log_interval
-            ppl = math.exp(cur_loss)
-            print(
-                f"| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | "
-                f"lr {lr:02.4f} | ms/batch {ms_per_batch:5.2f} | "
-                f"loss {cur_loss:5.2f} | ppl {ppl:8.2f}"
-            )
-            total_loss = 0
-            start_time = time.time()
+def benchmark_torch_function_in_microseconds(f, *args, **kwargs):
+    import torch.utils.benchmark as benchmark
+    t0 = benchmark.Timer(
+        stmt="f(*args, **kwargs)", globals={"args": args, "kwargs": kwargs, "f": f}
+    )
+    return t0.blocked_autorange().mean * 1e6
 
 
 def evaluate(
@@ -199,21 +69,25 @@ def data_process(raw_text_iter: dataset.IterableDataset, vocab, tokenizer) -> Te
     ]
     return torch.cat(tuple(filter(lambda t: t.numel() > 0, data)))
 
+def toy_data(num_tokens, d_model, dtype):
+    return torch.rand((num_tokens, d_model), device=torch.device('cuda'), dtype=dtype)
+
 
 def batchify(data: Tensor, bsz: int, device: str) -> Tensor:
     """Divides the data into bsz separate sequences, removing extra elements
     that wouldn't cleanly fit.
 
     Args:
-        data: Tensor, shape [N]
+        data: Tensor, shape [N, emsize]
         bsz: int, batch size
 
     Returns:
-        Tensor of shape [N // bsz, bsz]
+        Tensor of shape [N // bsz, bsz, emsize]
     """
     seq_len = data.size(0) // bsz
+    emsize = data.size(1)
     data = data[: seq_len * bsz]
-    data = data.view(bsz, seq_len).t().contiguous()
+    data = data.view(bsz, seq_len, emsize)
     return data.to(device)
 
 
@@ -245,27 +119,29 @@ def main():
     print(f"GPU type: {gpu}")
     print(f"Training will be performed on device {device}")
 
-    train_iter = WikiText2(split="train")
-    tokenizer = get_tokenizer("basic_english")
-    vocab = build_vocab_from_iterator(map(tokenizer, train_iter), specials=["<unk>"])
-    vocab.set_default_index(vocab["<unk>"])
+    d_model = 1024  # embedding dimension
+
+    # SET MODEL DTYPE
+    dtype = torch.bfloat16
+    # dtype = torch.half
+    # dtype = torch.float32
 
     # train_iter was "consumed" by the process of building the vocab,
     # so we have to create it again
-    train_iter, val_iter, test_iter = WikiText2()
-    train_data = data_process(train_iter, vocab, tokenizer)
-    val_data = data_process(val_iter, vocab, tokenizer)
-    test_data = data_process(test_iter, vocab, tokenizer)
+    train_data = toy_data(1000, d_model, dtype)
+    val_data = toy_data(1000, d_model, dtype)
+    test_data = toy_data(1000, d_model, dtype)
 
     batch_size = 32
     eval_batch_size = 32
-    ntokens = len(vocab)  # size of vocabulary
-    emsize = 1024  # embedding dimension
     d_hid = 1024  # dimension of the feedforward network model in nn.TransformerEncoder
     nlayers = 16  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     nhead = 16  # number of heads in nn.MultiheadAttention
     dropout = 0  # 0..2  # dropout probability
-    model = TransformerModel(ntokens, emsize, nhead, d_hid, nlayers, dropout).to(device)
+    # model = TransformerModel(ntokens, emsize, nhead, d_hid, nlayers, dropout).to(device)
+    encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout, batch_first=True)
+    model = TransformerEncoder(encoder_layers, nlayers)
+    model = model.to(device)
     train_seq_len = 1024
     eval_seq_len = 256
     epochs = 8
@@ -281,14 +157,10 @@ def main():
 
     lr = 3  # learning rate
 
-    # SET MODEL DTYPE
-    dtype = torch.bfloat16
-    # dtype = torch.half
-    # dtype = torch.float32
 
-    train_data = batchify(train_data, batch_size, device)  # shape [seq_len, batch_size]
     val_data = batchify(val_data, eval_batch_size, device)
-    test_data = batchify(test_data, eval_batch_size, device)
+
+    print("val_data.size(): ", train_data.size())
 
     model = model.to(dtype)
 
@@ -296,52 +168,10 @@ def main():
     # model = torch.compile(model, fullgraph=True)
     model = model
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, foreach=True)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 300, gamma=0.1)
-
     if profile_path is not None:
         print(f"Saving profile to:{profile_path}")
-    # profile_path=None
     print(f"Using SDP backed by {kernel.name} ")
-    print(f"Training a model of dtype {dtype}")
-    for epoch in range(1, epochs + 1):
-        epoch_start_time = time.time()
-        with torch.backends.cuda.sdp_kernel(**backend_map[kernel]):
-            train(
-                model,
-                train_data,
-                train_seq_len,
-                device,
-                ntokens,
-                criterion,
-                optimizer,
-                scheduler,
-                epoch,
-                profile_path,
-            )
-            val_loss = evaluate(
-                model, val_data, eval_seq_len, device, ntokens, criterion
-            )
-        val_ppl = math.exp(val_loss)
-        elapsed = time.time() - epoch_start_time
-        print("-" * 89)
-        print(
-            f"| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | "
-            f"val loss {val_loss:5.2f} | val ppl {val_ppl:8.2f}"
-        )
-        print("-" * 89)
-
-        scheduler.step()
-
-    print("We are now evalutating the model")
-    test_loss = evaluate(model, test_data, train_seq_len, device, ntokens, criterion)
-    test_ppl = math.exp(test_loss)
-    print("=" * 89)
-    print(
-        f"| End of training | test loss {test_loss:5.2f} | " f"test ppl {test_ppl:8.2f}"
-    )
-    print("=" * 89)
+    print(f"Eval time: {benchmark_torch_function_in_microseconds(model, val_data)}")
 
 
 if __name__ == "__main__":
