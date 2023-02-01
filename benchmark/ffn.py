@@ -32,8 +32,6 @@ class FFN(torch.nn.Module):
         x = self.activation(x)
         return self.linear2(x)
 
-def use_int8_weight(module: torch.fx.GraphModule) -> torch.fx.GraphModule:
-    pass
 
 def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     seq_len = 256
@@ -48,12 +46,8 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
-        ffn.linear1.weight = torch.nn.Parameter(
-            protoquant.QTensor(ffn.linear1.weight).force_quantize(is_a=False)
-        )
-        ffn.linear2.weight = torch.nn.Parameter(
-            protoquant.QTensor(ffn.linear2.weight).force_quantize(is_a=False)
-        )
+        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1)
+        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2)
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)
