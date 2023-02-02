@@ -10,24 +10,24 @@ from torch._inductor.decomposition import decompositions
 from torch.fx.experimental.proxy_tensor import make_fx
 
 
-# @contextlib.contextmanager
-# def _reenter_functionalization():
-#     # See: note [Fake Tensor Dispatch Keys]
-#     func_excluded = torch._C._dispatch_tls_local_exclude_set().has(
-#         torch._C.DispatchKey.Functionalize
-#     )
-#     torch._C._dispatch_tls_set_dispatch_key_excluded(
-#         torch._C.DispatchKey.Functionalize, False
-#     )
-#     try:
-#         yield
-#     finally:
-#         torch._C._dispatch_tls_set_dispatch_key_excluded(
-#             torch._C.DispatchKey.Functionalize, func_excluded
-#         )
+@contextlib.contextmanager
+def _reenter_functionalization():
+    # See: note [Fake Tensor Dispatch Keys]
+    func_excluded = torch._C._dispatch_tls_local_exclude_set().has(
+        torch._C.DispatchKey.Functionalize
+    )
+    torch._C._dispatch_tls_set_dispatch_key_excluded(
+        torch._C.DispatchKey.Functionalize, False
+    )
+    try:
+        yield
+    finally:
+        torch._C._dispatch_tls_set_dispatch_key_excluded(
+            torch._C.DispatchKey.Functionalize, func_excluded
+        )
 
 
-# @torch.compile()
+@torch.compile()
 def quant_kernel(inputs):
     # Writing out these values as constants
     # precision = 8
@@ -135,5 +135,5 @@ def quant(inputs, dim):
 
     assert inputs.is_contiguous()
 
-    # with _reenter_functionalization():
-    return quant_kernel(inputs)
+    with _reenter_functionalization():
+        return quant_kernel(inputs)

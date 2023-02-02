@@ -13,6 +13,8 @@ from torch.utils.data import dataset
 import logging
 from torch._dynamo import config
 
+import protoquant
+
 torch.set_float32_matmul_precision("high")
 # config.log_level = logging.DEBUG
 # config.verbose = True
@@ -124,20 +126,12 @@ def main():
     d_model = 1024  # embedding dimension
 
     # SET MODEL DTYPE
-    dtype = torch.bfloat16
-    # dtype = torch.half
-    # dtype = torch.float32
+    dtype = torch.half
 
-    # train_iter was "consumed" by the process of building the vocab,
-    # so we have to create it again
-    train_data = toy_data(1000, d_model, dtype)
-    val_data = toy_data(1000, d_model, dtype)
-    test_data = toy_data(1000, d_model, dtype)
 
-    batch_size = 32
-    eval_batch_size = 32
-    d_hid = 1024  # dimension of the feedforward network model in nn.TransformerEncoder
-    nlayers = 16  # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
+    batch_size = 256
+    d_hid = 4096  # dimension of the feedforward network model in nn.TransformerEncoder
+    nlayers = 8 # number of nn.TransformerEncoderLayer in nn.TransformerEncoder
     nhead = 16  # number of heads in nn.MultiheadAttention
     dropout = 0  # 0..2  # dropout probability
     # model = TransformerModel(ntokens, emsize, nhead, d_hid, nlayers, dropout).to(device)
@@ -149,32 +143,33 @@ def main():
     eval_seq_len = 256
     epochs = 8
 
-    # Select which kernel to use
-    # kernel = SDPBackend.MATH
-    # kernel = SDPBackend.FLASH_ATTENTION
-    kernel = SDPBackend.EFFICIENT_ATTENTION
+    # train_iter was "consumed" by the process of building the vocab,
+    # so we have to create it again
+    val_data = toy_data(256 * batch_size, d_model, dtype)
+    val_data = batchify(val_data, batch_size, device)
 
-    profile_path = f"/scratch/drisspg/work/scripts/data/profiles/xlmr_train_{kernel.name}_batch_size_"\
-        f"{batch_size}_d_hid{d_hid}_nlayers{nlayers}_nhead{nhead}_seq_len_{train_seq_len}.json"
-    # profile_path=None
+    model = model.to(dtype).eval()
 
-    lr = 3  # learning rate
+    t0 = benchmark_torch_function_in_microseconds(model, val_data)
+    # t1 = benchmark_torch_function_in_microseconds(torch.compile(model), val_data)
+    # with torch.no_grad():
+    #     t2 = benchmark_torch_function_in_microseconds(torch.compile(model), val_data)
 
-    val_data = batchify(val_data, eval_batch_size, device)
+    for i in range(nlayers):
+        model.layers[i].linear1 = protoquant.qlinear_from_linear(model.layers[i].linear1)
+        model.layers[i].linear2 = protoquant.qlinear_from_linear(model.layers[i].linear2)
 
-    print("val_data.size(): ", train_data.size())
+    t3 = benchmark_torch_function_in_microseconds(model, val_data)
 
-    model = model.to(dtype)
+    with torch.no_grad():
+        t4 = benchmark_torch_function_in_microseconds(model, val_data)
 
-    # Pick which dtype to use
-    # model = torch.compile(model, fullgraph=True)
-    model = model
-
-    if profile_path is not None:
-        print(f"Saving profile to:{profile_path}")
-    print(f"Using SDP backed by {kernel.name} ")
-    print(
-        f"Eval time: {benchmark_torch_function_in_microseconds(model, val_data)}")
+    print("val_data: ", val_data.size())
+    print(f"Baseline: {t0}")
+    # print(f"Compiled: {t1}")
+    # print(f"Compiled + no_grad: {t2}")
+    print(f"Quantized: {t3}")
+    print(f"Quantized + no_grad: {t4}")
 
 
 if __name__ == "__main__":
