@@ -23,15 +23,21 @@ class FFN(torch.nn.Module):
     def __init__(self, d_model, dim_feedforward, device, dtype):
         super(FFN, self).__init__()
         factory_kwargs = {"device": device, "dtype": dtype}
-        self.linear1 = torch.nn.Linear(d_model, dim_feedforward, **factory_kwargs)
+        self.linear1 = torch.nn.Linear(
+            d_model, dim_feedforward, **factory_kwargs)
         self.activation = torch.nn.functional.relu
-        self.linear2 = torch.nn.Linear(dim_feedforward, d_model, **factory_kwargs)
+        self.linear2 = torch.nn.Linear(
+            dim_feedforward, d_model, **factory_kwargs)
 
     def forward(self, x):
         x = self.linear1(x)
         x = self.activation(x)
         return self.linear2(x)
 
+
+# torch._inductor.config.implicit_fallbacks = False
+# torch._dynamo.config.verbose = True
+torch._inductor.config.debug = True
 
 def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     seq_len = 256
@@ -51,7 +57,8 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
         ffn = torch.compile(ffn)
         fp8_ref = ffn(inp).detach().clone().float()
         # torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
-    return benchmark_torch_function_in_microseconds(ffn, inp)
+    with torch.no_grad():
+        return benchmark_torch_function_in_microseconds(ffn, inp)
 
 
 def get_default_shapes():

@@ -37,7 +37,7 @@ def quant_kernel(inputs):
     qmax = 127
     row_min_val = inputs.amin(dim=1)
     row_max_val = inputs.amax(dim=1)
-    row_sum_val = inputs.sum(dim=1)
+    # row_sum_val = inputs.sum(dim=1)
 
     mins = row_min_val
     maxs = row_max_val
@@ -120,7 +120,7 @@ def quant_kernel(inputs):
     nudged_zero_point = torch.where(initial_zero_point > qmax, qmax, nudged_zero_point)
 
     inv_scale = 1.0 / scale
-    precomputed_sum = torch.round(row_sum_val * inv_scale).to(torch.int32)
+    precomputed_sum = torch.round(inputs.sum(dim=1) * inv_scale).to(torch.int32)
 
     transformed_val = (inputs * inv_scale.unsqueeze(1)).to(torch.float32)
     transformed_val = torch.round(transformed_val) + nudged_zero_point.unsqueeze(1)
