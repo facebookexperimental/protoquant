@@ -27,7 +27,6 @@ def _reenter_functionalization():
         )
 
 
-# @torch.compile()
 def dequant_kernel(
     inputs,
     other,
@@ -86,5 +85,5 @@ def dequant(
         mat2_sums.view(1, s1),
     ]
 
-    # with _reenter_functionalization():
-    return dequant_kernel(*all_inputs)[0]
+    with _reenter_functionalization():
+        return torch.compile(dequant_kernel)(*all_inputs)[0]
