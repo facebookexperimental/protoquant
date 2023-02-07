@@ -37,7 +37,7 @@ class FFN(torch.nn.Module):
 
 # torch._inductor.config.implicit_fallbacks = False
 # torch._dynamo.config.verbose = True
-torch._inductor.config.debug = True
+# torch._inductor.config.debug = True
 
 def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     seq_len = 256

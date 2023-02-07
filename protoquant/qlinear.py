@@ -157,7 +157,7 @@ class QLinear(torch.nn.Module):
         wparams = self.wparams
 
         # d = torch.ops.protoquant._triton_gemm(qinp, qweight.t())
-        d = torch.ops.aten._int_addmm(qinp, qweight.t())
+        d = torch.ops.aten._int_mm(qinp, qweight.t())
         # d = torch.mm(qinp.float(), qweight.t().float()).int()
         # d = _matmul_call(qinp, qweight.t())
         # return dqntz(d, iparams, wparams, bias).view(inp_size0, inp_size1, -1)
