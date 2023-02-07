@@ -220,44 +220,6 @@ def _kernel(
     else:
         tl.atomic_add(C, acc, mask=mask)
 
-def _matmul_call(a, b):
-    device = a.device
-    # handle non-contiguous inputs if necessary
-    if a.stride(0) > 1 and a.stride(1) > 1:
-        a = a.contiguous()
-    if b.stride(0) > 1 and b.stride(1) > 1:
-        b = b.contiguous()
-    # checks constraints
-    assert a.shape[1] == b.shape[0], "incompatible dimensions"
-    M, K = a.shape
-    _, N = b.shape
-    # allocates output
-    c = torch.empty((M, N), device=device, dtype=torch.int32)
-    # accumulator types
-    ACC_TYPE = tl.int32
-    # launch kernel
-    grid = lambda META: (
-        triton.cdiv(M, META["BLOCK_M"]) * triton.cdiv(N, META["BLOCK_N"]),
-        META["SPLIT_K"],
-    )
-    _kernel[grid](
-        a,
-        b,
-        c,
-        M,
-        N,
-        K,
-        a.stride(0),
-        a.stride(1),
-        b.stride(0),
-        b.stride(1),
-        c.stride(0),
-        c.stride(1),
-        GROUP_M=8,
-        ACC_TYPE=ACC_TYPE,
-    )
-    return c
-
 
 class _matmul(torch.autograd.Function):
     kernel = _kernel
@@ -266,7 +228,42 @@ class _matmul(torch.autograd.Function):
 
     @staticmethod
     def _call(a, b):
-        return _matmul_call(a, b)
+        device = a.device
+        # handle non-contiguous inputs if necessary
+        if a.stride(0) > 1 and a.stride(1) > 1:
+            a = a.contiguous()
+        if b.stride(0) > 1 and b.stride(1) > 1:
+            b = b.contiguous()
+        # checks constraints
+        assert a.shape[1] == b.shape[0], "incompatible dimensions"
+        M, K = a.shape
+        _, N = b.shape
+        # allocates output
+        c = torch.empty((M, N), device=device, dtype=torch.int32)
+        # accumulator types
+        ACC_TYPE = tl.int32
+        # launch kernel
+        grid = lambda META: (
+            triton.cdiv(M, META["BLOCK_M"]) * triton.cdiv(N, META["BLOCK_N"]),
+            META["SPLIT_K"],
+        )
+        _kernel[grid](
+            a,
+            b,
+            c,
+            M,
+            N,
+            K,
+            a.stride(0),
+            a.stride(1),
+            b.stride(0),
+            b.stride(1),
+            c.stride(0),
+            c.stride(1),
+            GROUP_M=8,
+            ACC_TYPE=ACC_TYPE,
+        )
+        return c
 
     @staticmethod
     def forward(ctx, a, b):
@@ -274,8 +271,3 @@ class _matmul(torch.autograd.Function):
 
 
 matmul = _matmul.apply
-
-# _test_lib_def = torch.library.Library("protoquant", "DEF")
-# _test_lib_def.define("_triton_gemm(Tensor self, Tensor other) -> Tensor")
-_test_lib_impl = torch.library.Library("protoquant", "IMPL")
-_test_lib_impl.impl("_triton_gemm", lambda x, y: _matmul_call(x, y), "CUDA")

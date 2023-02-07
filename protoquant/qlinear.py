@@ -1,9 +1,8 @@
 import torch
 from torch.nn.parameter import Parameter
+# from protoquant.src.triton.dequant import dequant_kernel
+# from protoquant.src.triton.quant import quant_kernel
 from protoquant.quantization import dqntz, qntz
-from protoquant.src.triton.matmul import _matmul_call
-from protoquant.src.triton.dequant import dequant_kernel
-from protoquant.src.triton.quant import quant_kernel
 
 
 class QLinear(torch.nn.Module):
@@ -24,32 +23,17 @@ class QLinear(torch.nn.Module):
         inp_size2 = inp.size(2)
         inp = inp.reshape(inp_size0 * inp_size1, inp_size2)
 
-        # qinp, iparams = qntz(inp, is_a=True)
-
-        # row wise and without transpose
-        _, _, scales, zeros, sums, qinp = quant_kernel(inp)  # dim: 1
+        qinp, iparams = qntz(inp, is_a=True)
 
         bias = self.bias
         qweight = self.qweight
         wparams = self.wparams
 
         # d = torch.ops.protoquant._triton_gemm(qinp, qweight.t())
-        d = torch.ops.aten._int_mm(qinp, qweight.t())
-        # d = torch.mm(qinp.float(), qweight.t().float()).int()
+        # d = torch.ops.aten._int_mm(qinp, qweight.t())
+        d = torch.mm(qinp.float(), qweight.t().float()).int()
         # d = _matmul_call(qinp, qweight.t())
-        # return dqntz(d, iparams, wparams, bias).view(inp_size0, inp_size1, -1)
-        d_size0 = d.size(0)
-        d_size1 = d.size(1)
-        return dequant_kernel(
-            d,
-            bias,
-            scales.view(d_size0, 1),
-            zeros.view(d_size0, 1),
-            sums.view(d_size0, 1),
-            wparams.scales.view(1, d_size1),
-            wparams.zeros.view(1, d_size1),
-            wparams.sums.view(1, d_size1),
-        )[0].view(inp_size0, inp_size1, -1)
+        return dqntz(d, iparams, wparams, bias).view(inp_size0, inp_size1, -1)
 
     def extra_repr(self) -> str:
         return 'in_features={}, out_features={}, bias={}'.format(

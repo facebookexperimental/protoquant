@@ -45,7 +45,6 @@ TORCH_LIBRARY(protoquant, m) {
   m.def("gemm_out(Tensor out, Tensor mat1, Tensor mat2) -> Tensor");
   m.def("ngemm(Tensor out, Tensor mat2) -> Tensor");
   m.def("ngemm_out(Tensor(a!) out, Tensor input, Tensor mat2) -> Tensor");
-  m.def("_triton_gemm(Tensor mat1, Tensor mat2) -> Tensor");
 }
 TORCH_LIBRARY_IMPL(protoquant, CPU, m) {
   m.impl("gemm", gemm_cpu);
