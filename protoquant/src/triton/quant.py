@@ -131,7 +131,4 @@ def quant_kernel(inputs):
 def quant(inputs, dim):
     assert dim == 1
     n_rows, n_cols = inputs.shape
-
-    assert inputs.is_contiguous()
-
     return quant_kernel(inputs)

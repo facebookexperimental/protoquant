@@ -67,7 +67,6 @@ def dequant(
         not mat2_rowwise and mat2_transpose
     ), "Expected mat1 to be quantized rowwise, non-transposed and mat2 to be quantized colwise, transposed!"
     n_rows, n_cols = inputs.shape
-    assert inputs.is_contiguous()
 
     s0 = inputs.size(0)
     s1 = inputs.size(1)

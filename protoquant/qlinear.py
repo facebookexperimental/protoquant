@@ -9,7 +9,7 @@ class QLinear(torch.nn.Module):
         super(QLinear, self).__init__()
         assert isinstance(bias, Parameter)
         # Need to store in transposed form due to cuBLAS
-        self.qweight_transposed = qweight.t().contiguous()
+        self.qweight = qweight
         self.wparams = wparams
         self.bias = bias
         self.in_features = qweight.size(1)
@@ -22,7 +22,7 @@ class QLinear(torch.nn.Module):
         inp_size2 = inp.size(2)
         inp = inp.reshape(inp_size0 * inp_size1, inp_size2)
         qinp, iparams = qntz(inp, is_a=True)
-        d = torch.ops.aten._int_mm(qinp, self.qweight_transposed)
+        d = torch.ops.aten._int_mm(qinp, self.qweight.t())
         return dqntz(d, iparams, self.wparams, self.bias).view(inp_size0, inp_size1, -1)
 
     def extra_repr(self) -> str:
