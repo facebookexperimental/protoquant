@@ -13,10 +13,15 @@ import torch.utils.benchmark as benchmark
 
 
 def benchmark_torch_function_in_microseconds(f, *args, **kwargs):
+    # Manual warmup
+    f(*args, **kwargs)
+    f(*args, **kwargs)
+
     t0 = benchmark.Timer(
         stmt="f(*args, **kwargs)", globals={"args": args, "kwargs": kwargs, "f": f}
     )
-    return t0.blocked_autorange().mean * 1e6
+    measurement = t0.blocked_autorange()
+    return measurement.mean * 1e6
 
 
 class FFN(torch.nn.Module):
@@ -54,7 +59,8 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     if use_q:
         ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1)
         ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2)
-        ffn = torch.compile(ffn)
+        # ffn = torch.compile(ffn) #, options={"max-autotune": True})
+        ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)
