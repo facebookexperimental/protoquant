@@ -27,7 +27,6 @@ def _reenter_functionalization():
         )
 
 
-@torch.compile()
 def quant_kernel(inputs):
     # Writing out these values as constants
     # precision = 8
@@ -132,8 +131,4 @@ def quant_kernel(inputs):
 def quant(inputs, dim):
     assert dim == 1
     n_rows, n_cols = inputs.shape
-
-    assert inputs.is_contiguous()
-
-    with _reenter_functionalization():
-        return quant_kernel(inputs)
+    return quant_kernel(inputs)

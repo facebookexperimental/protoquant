@@ -27,7 +27,6 @@ def _reenter_functionalization():
         )
 
 
-@torch.compile()
 def dequant_kernel(
     inputs,
     other,
@@ -68,7 +67,6 @@ def dequant(
         not mat2_rowwise and mat2_transpose
     ), "Expected mat1 to be quantized rowwise, non-transposed and mat2 to be quantized colwise, transposed!"
     n_rows, n_cols = inputs.shape
-    assert inputs.is_contiguous()
 
     s0 = inputs.size(0)
     s1 = inputs.size(1)
@@ -86,5 +84,4 @@ def dequant(
         mat2_sums.view(1, s1),
     ]
 
-    with _reenter_functionalization():
-        return dequant_kernel(*all_inputs)[0]
+    return dequant_kernel(*all_inputs)[0]

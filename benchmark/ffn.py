@@ -13,10 +13,15 @@ import torch.utils.benchmark as benchmark
 
 
 def benchmark_torch_function_in_microseconds(f, *args, **kwargs):
+    # Manual warmup
+    f(*args, **kwargs)
+    f(*args, **kwargs)
+
     t0 = benchmark.Timer(
         stmt="f(*args, **kwargs)", globals={"args": args, "kwargs": kwargs, "f": f}
     )
-    return t0.blocked_autorange().mean * 1e6
+    measurement = t0.blocked_autorange()
+    return measurement.mean * 1e6
 
 
 class FFN(torch.nn.Module):
@@ -28,11 +33,14 @@ class FFN(torch.nn.Module):
         self.linear2 = torch.nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
     def forward(self, x):
-        # print("x.size(): ", x.size())
-        # print("self.linear1.weight.size(): ", self.linear1.weight.size())
         x = self.linear1(x)
         x = self.activation(x)
         return self.linear2(x)
+
+
+# torch._inductor.config.implicit_fallbacks = False
+# torch._dynamo.config.verbose = True
+# torch._inductor.config.debug = True
 
 
 def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
@@ -48,12 +56,9 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
-        ffn.linear1.weight = torch.nn.Parameter(
-            protoquant.QTensor(ffn.linear1.weight).force_quantize(is_a=False)
-        )
-        ffn.linear2.weight = torch.nn.Parameter(
-            protoquant.QTensor(ffn.linear2.weight).force_quantize(is_a=False)
-        )
+        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1)
+        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2)
+        # ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)
