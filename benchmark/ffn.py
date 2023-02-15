@@ -59,8 +59,7 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
     if use_q:
         ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1)
         ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2)
-        # ffn = torch.compile(ffn) #, options={"max-autotune": True})
-        ffn = torch.compile(ffn, options={"max-autotune": True})
+        # ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)

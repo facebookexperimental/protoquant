@@ -1,6 +1,7 @@
 import torch
 from torch.nn.parameter import Parameter
 from protoquant.quantization import dqntz, qntz
+from protoquant.src.triton.matmul import matmul as matmul_int8
 
 
 class QLinear(torch.nn.Module):
@@ -21,9 +22,10 @@ class QLinear(torch.nn.Module):
         inp_size1 = inp.size(1)
         inp_size2 = inp.size(2)
         inp = inp.reshape(inp_size0 * inp_size1, inp_size2)
-        qinp, iparams = qntz(inp, is_a=True)
-        d = torch.ops.aten._int_mm(qinp, self.qweight.t())
-        return dqntz(d, iparams, self.wparams, self.bias).view(inp_size0, inp_size1, -1)
+        qinp, iparams = torch.compile(qntz)(inp, is_a=True)
+        # d = torch.ops.aten._int_mm(qinp, self.qweight.t())
+        d = matmul_int8(qinp, self.qweight.t())
+        return torch.compile(dqntz)(d, iparams, self.wparams, self.bias).view(inp_size0, inp_size1, -1)
 
     def extra_repr(self) -> str:
         return 'in_features={}, out_features={}, bias={}'.format(
