@@ -57,7 +57,7 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size, seq_len, minimize
     if use_q:
         ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
         ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
-        ffn = torch.compile(ffn, options={"max-autotune": True})
+        # ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)
@@ -150,8 +150,8 @@ if __name__ == "__main__":
     print(",".join(headers))
     bs = int(args.batchsize)
     seq_len = int(args.seq_len)
-    for minimize_error in [True, False]:
-        for d_model, dim_feedforward, annotation in shape_gen():
+    for d_model, dim_feedforward, annotation in shape_gen():
+        for minimize_error in [True, False]:
             with_q = run_benchmark(True, d_model, dim_feedforward, bs, seq_len, minimize_error)
             without_q = run_benchmark(False, d_model, dim_feedforward, bs, seq_len)
             print(

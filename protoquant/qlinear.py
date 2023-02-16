@@ -22,10 +22,10 @@ class QLinear(torch.nn.Module):
         inp_size1 = inp.size(1)
         inp_size2 = inp.size(2)
         inp = inp.reshape(inp_size0 * inp_size1, inp_size2)
-        qinp, iparams = qntz(inp, is_a=True, minimize_error=self.minimize_error)
-        d = torch.ops.aten._int_mm(qinp, self.qweight.t())
-        # d = matmul_int8(qinp, self.qweight.t())
-        return dqntz(d, iparams, self.wparams, self.bias).view(
+        qinp, iparams = torch.compile(qntz)(inp, is_a=True, minimize_error=self.minimize_error)
+        # d = torch.ops.aten._int_mm(qinp, self.qweight.t())
+        d = matmul_int8(qinp, self.qweight.t())
+        return torch.compile(dqntz)(d, iparams, self.wparams, self.bias).view(
             inp_size0, inp_size1, -1
         )
 
