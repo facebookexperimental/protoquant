@@ -49,7 +49,7 @@ def quant_kernel(inputs):
 
     # Use double precision for intermediate computation but use single precision
     # in final number to reflect the actual number used during quantization.
-    scale = ((row_max_val.to(torch.float64) - row_min_val) / (qmax - qmin)).to(
+    scale = ((row_max_val.to(torch.float32) - row_min_val) / (qmax - qmin)).to(
         torch.float32
     )
 
@@ -66,10 +66,10 @@ def quant_kernel(inputs):
     amplifier = SMALL_SCALE_THRESHOLD / scale
     scale = torch.where(is_small_scale, SMALL_SCALE_THRESHOLD, scale)
 
-    # Unconditionally create amplified variant for small scales
-    row_max_val_amplified = torch.where(
-        is_small_scale, amplifier * row_max_val, row_max_val
-    ).to(torch.float32)
+    # # Unconditionally create amplified variant for small scales
+    # row_max_val_amplified = torch.where(
+    #     is_small_scale, amplifier * row_max_val, row_max_val
+    # ).to(torch.float32)
     row_min_val_amplified = torch.where(
         is_small_scale, amplifier * row_min_val, row_min_val
     ).to(torch.float32)
@@ -83,7 +83,7 @@ def quant_kernel(inputs):
     # row_min_val_amplified = tl.where(tl.minimum(is_small_scale, is_row_max_val_zero),
     #                        -SMALL_SCALE_THRESHOLD * (qmax_val - qmin_val), row_min_val)
 
-    row_max_val = row_max_val_amplified
+    # row_max_val = row_max_val_amplified
     row_min_val = row_min_val_amplified
 
     # Zero-point computation.
@@ -94,17 +94,19 @@ def quant_kernel(inputs):
     # The arithmetic error on the zero point computed from either pair
     # will be roughly machine_epsilon * (sum of absolute values of terms)
     # so we want to use the variant that adds the smaller terms.
-    scale_fp64 = scale.to(torch.float64)
+    scale_fp64 = scale.to(torch.float32)
     zero_point_from_min = qmin - (row_min_val / scale_fp64)
-    zero_point_from_max = qmax - (row_max_val / scale_fp64)
-    zero_point_from_min_error = abs(qmin) + torch.abs(row_min_val / scale_fp64)
-    zero_point_from_max_error = abs(qmax) + torch.abs(row_max_val / scale_fp64)
+    # zero_point_from_max = qmax - (row_max_val / scale_fp64)
+    # zero_point_from_min_error = abs(qmin) + torch.abs(row_min_val / scale_fp64)
+    # zero_point_from_max_error = abs(qmax) + torch.abs(row_max_val / scale_fp64)
 
-    initial_zero_point = torch.where(
-        zero_point_from_min_error < zero_point_from_max_error,
-        zero_point_from_min,
-        zero_point_from_max,
-    ).to(torch.int32)
+    # initial_zero_point = torch.where(
+    #     zero_point_from_min_error < zero_point_from_max_error,
+    #     zero_point_from_min,
+    #     zero_point_from_max,
+    # ).to(torch.int32)
+
+    initial_zero_point = zero_point_from_min.to(torch.int32)
 
 #    # Now we need to nudge the zero point to be an integer
 #    # (our zero points are integer, and this is motivated by the requirement

@@ -41,10 +41,9 @@ class FFN(torch.nn.Module):
 # torch._inductor.config.implicit_fallbacks = False
 # torch._dynamo.config.verbose = True
 # torch._inductor.config.debug = True
+# torch._inductor.triton.cudagraphs=True
 
-
-def run_benchmark(use_q, d_model, dim_feedforward, batch_size):
-    seq_len = 256
+def run_benchmark(use_q, d_model, dim_feedforward, batch_size, seq_len):
     inp = torch.randn(batch_size, seq_len, d_model)
     inp = inp.half().cuda()
     ffn = FFN(
@@ -69,6 +68,12 @@ def get_default_shapes():
         itertools.product([1024, 2048, 4096, 8192], [1024, 2048, 4096, 8192])
     ):
         yield (d_model, dim_feedforward, f"default{i}")
+
+def get_big_shapes():
+    for i, (d_model, dim_feedforward) in enumerate(
+        itertools.product([8192, 16384], [8192, 16384])
+    ):
+        yield (d_model, dim_feedforward, f"big{i}")
 
 
 def get_opt_shapes():
@@ -113,11 +118,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("batchsize")
+    parser.add_argument("seq_len")
     parser.add_argument("--opt-shapes", action="store_true")
+    parser.add_argument("--big-shapes", action="store_true")
     args = parser.parse_args()
 
     headers = [
         "bs",
+        "seq_len",
         "kind",
         "d_model",
         "dim_feedforward",
@@ -128,17 +136,21 @@ if __name__ == "__main__":
     shape_gen = get_default_shapes
     if args.opt_shapes:
         shape_gen = get_opt_shapes
+    if args.big_shapes:
+        shape_gen = get_big_shapes
     print(",".join(headers))
     bs = int(args.batchsize)
+    seq_len = int(args.seq_len)
     for d_model, dim_feedforward, annotation in shape_gen():
-        with_q = run_benchmark(True, d_model, dim_feedforward, bs)
-        without_q = run_benchmark(False, d_model, dim_feedforward, bs)
+        with_q = run_benchmark(True, d_model, dim_feedforward, bs, seq_len)
+        without_q = run_benchmark(False, d_model, dim_feedforward, bs, seq_len)
         print(
             ",".join(
                 map(
                     str,
                     [
                         bs,
+                        seq_len,
                         annotation,
                         d_model,
                         dim_feedforward,
