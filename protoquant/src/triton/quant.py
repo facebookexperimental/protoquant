@@ -136,7 +136,8 @@ def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True, scale_dtype=to
     return mins, maxs, scale_fp64, nudged_zero_point, precomputed_sum, output
 
 
-def quant(inputs, dim):
+def quant(inputs, dim, minimize_error):
     assert dim == 1
     n_rows, n_cols = inputs.shape
-    return quant_kernel(inputs)
+    scale_dtype = torch.float64 if minimize_error else torch.float32
+    return quant_kernel(inputs, minimize_error=minimize_error, nudge_to_zero=minimize_error, scale_dtype=scale_dtype)

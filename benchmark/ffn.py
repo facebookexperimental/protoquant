@@ -43,7 +43,7 @@ class FFN(torch.nn.Module):
 # torch._inductor.config.debug = True
 # torch._inductor.triton.cudagraphs=True
 
-def run_benchmark(use_q, d_model, dim_feedforward, batch_size, seq_len):
+def run_benchmark(use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True):
     inp = torch.randn(batch_size, seq_len, d_model)
     inp = inp.half().cuda()
     ffn = FFN(
@@ -55,8 +55,8 @@ def run_benchmark(use_q, d_model, dim_feedforward, batch_size, seq_len):
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
-        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1)
-        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2)
+        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
+        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
         ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
@@ -139,6 +139,7 @@ if __name__ == "__main__":
         "dim_feedforward",
         "with_q(μs)",
         "without_q(μs)",
+        "minimize_error",
         "speedup",
     ]
     shape_gen = get_default_shapes
@@ -149,23 +150,25 @@ if __name__ == "__main__":
     print(",".join(headers))
     bs = int(args.batchsize)
     seq_len = int(args.seq_len)
-    for d_model, dim_feedforward, annotation in shape_gen():
-        with_q = run_benchmark(True, d_model, dim_feedforward, bs, seq_len)
-        without_q = run_benchmark(False, d_model, dim_feedforward, bs, seq_len)
-        print(
-            ",".join(
-                map(
-                    str,
-                    [
-                        bs,
-                        seq_len,
-                        annotation,
-                        d_model,
-                        dim_feedforward,
-                        f"{with_q:.0f}",
-                        f"{without_q:.0f}",
-                        f"{without_q / with_q:.2f}",
-                    ],
+    for minimize_error in [True, False]:
+        for d_model, dim_feedforward, annotation in shape_gen():
+            with_q = run_benchmark(True, d_model, dim_feedforward, bs, seq_len, minimize_error)
+            without_q = run_benchmark(False, d_model, dim_feedforward, bs, seq_len)
+            print(
+                ",".join(
+                    map(
+                        str,
+                        [
+                            bs,
+                            seq_len,
+                            annotation,
+                            d_model,
+                            dim_feedforward,
+                            f"{with_q:.0f}",
+                            f"{without_q:.0f}",
+                            minimize_error,
+                            f"{without_q / with_q:.2f}",
+                        ],
+                    )
                 )
             )
-        )

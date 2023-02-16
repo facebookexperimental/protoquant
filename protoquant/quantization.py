@@ -17,7 +17,8 @@ QParams = namedtuple(
 
 
 def qntz(
-    input: torch.Tensor, is_a: bool, do_pad: Optional[bool] = True
+    input: torch.Tensor, is_a: bool, do_pad: Optional[bool] = True,
+    minimize_error=True,
 ) -> Tuple[torch.Tensor, QParams]:
     assert input.dim() == 2
 
@@ -33,10 +34,11 @@ def qntz(
     pad_1 = pad(n) - n if do_pad else 0
 
     if rowwise and not transpose and pad_0 == 0 and pad_1 == 0:
-        mins, maxs, scales, zeros, sums, out = quant(input, 1)
+        mins, maxs, scales, zeros, sums, out = quant(input, 1, minimize_error)
         params = QParams(scales, zeros, sums, rowwise, transpose, dtype, pad_0, pad_1)
         return (out, params)
 
+    assert minimize_error
     out = torch.empty(
         [n + pad_1, m + pad_0] if transpose else [m + pad_0, n + pad_1],
         dtype=torch.int8,
