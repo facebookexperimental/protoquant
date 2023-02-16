@@ -104,28 +104,29 @@ def quant_kernel(inputs):
         zero_point_from_min_error < zero_point_from_max_error,
         zero_point_from_min,
         zero_point_from_max,
-    )
+    ).to(torch.int32)
 
-    # Now we need to nudge the zero point to be an integer
-    # (our zero points are integer, and this is motivated by the requirement
-    # to be able to represent the real value "0" exactly as a quantized value,
-    # which is required in multiple places, for example in Im2col with zero
-    # padding).
-    # TODO: Using torch.round for nearbyint. If there are accuracy issues, this
-    # might be worth investigating in more depth.
-    # nudged_zero_point = tl.libdevice.nearbyint(initial_zero_point).to(tl.int32)
-    nudged_zero_point = torch.round(initial_zero_point).to(torch.int32)
-    nudged_zero_point = torch.where(initial_zero_point < qmin, qmin, nudged_zero_point)
-    nudged_zero_point = torch.where(initial_zero_point > qmax, qmax, nudged_zero_point)
+#    # Now we need to nudge the zero point to be an integer
+#    # (our zero points are integer, and this is motivated by the requirement
+#    # to be able to represent the real value "0" exactly as a quantized value,
+#    # which is required in multiple places, for example in Im2col with zero
+#    # padding).
+#    # TODO: Using torch.round for nearbyint. If there are accuracy issues, this
+#    # might be worth investigating in more depth.
+#    # nudged_zero_point = tl.libdevice.nearbyint(initial_zero_point).to(tl.int32)
+#    nudged_zero_point = torch.round(initial_zero_point).to(torch.int32)
+#    nudged_zero_point = torch.where(initial_zero_point < qmin, qmin, nudged_zero_point)
+#    nudged_zero_point = torch.where(initial_zero_point > qmax, qmax, nudged_zero_point)
 
     inv_scale = 1.0 / scale
     precomputed_sum = torch.round(row_sum_val * inv_scale).to(torch.int32)
 
-    transformed_val = (inputs * inv_scale.unsqueeze(1)).to(torch.float32)
-    transformed_val = torch.round(transformed_val) + nudged_zero_point.unsqueeze(1)
+    transformed_val = (inputs * inv_scale.unsqueeze(1)).to(torch.int32) #float32)
+    # transformed_val = torch.round(transformed_val) + initial_zero_point.unsqueeze(1)
+    transformed_val = transformed_val + initial_zero_point.unsqueeze(1)
 
     output = torch.clamp(transformed_val, min=qmin, max=qmax).to(torch.int8)
-    return mins, maxs, scale_fp64, nudged_zero_point, precomputed_sum, output
+    return mins, maxs, scale_fp64, initial_zero_point, precomputed_sum, output
 
 
 def quant(inputs, dim):
