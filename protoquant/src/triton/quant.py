@@ -27,7 +27,7 @@ def _reenter_functionalization():
         )
 
 
-def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True):
+def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True, scale_dtype=torch.float64):
     # Writing out these values as constants
     # precision = 8
     # qmin = ((1 << (precision - 1)) * -1)
@@ -49,7 +49,7 @@ def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True):
 
     # Use double precision for intermediate computation but use single precision
     # in final number to reflect the actual number used during quantization.
-    scale = ((row_max_val.to(torch.float32) - row_min_val) / (qmax - qmin)).to(
+    scale = ((row_max_val.to(scale_dtype) - row_min_val) / (qmax - qmin)).to(
         torch.float32
     )
 
@@ -67,9 +67,10 @@ def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True):
     scale = torch.where(is_small_scale, SMALL_SCALE_THRESHOLD, scale)
 
     # # Unconditionally create amplified variant for small scales
-    # row_max_val_amplified = torch.where(
-    #     is_small_scale, amplifier * row_max_val, row_max_val
-    # ).to(torch.float32)
+    if minimize_error:
+        row_max_val_amplified = torch.where(
+            is_small_scale, amplifier * row_max_val, row_max_val
+        ).to(torch.float32)
     row_min_val_amplified = torch.where(
         is_small_scale, amplifier * row_min_val, row_min_val
     ).to(torch.float32)
@@ -83,7 +84,8 @@ def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True):
     # row_min_val_amplified = tl.where(tl.minimum(is_small_scale, is_row_max_val_zero),
     #                        -SMALL_SCALE_THRESHOLD * (qmax_val - qmin_val), row_min_val)
 
-    # row_max_val = row_max_val_amplified
+    if minimize_error:
+        row_max_val = row_max_val_amplified
     row_min_val = row_min_val_amplified
 
     # Zero-point computation.
@@ -94,7 +96,7 @@ def quant_kernel(inputs, minimize_error=True, nudge_to_zero=True):
     # The arithmetic error on the zero point computed from either pair
     # will be roughly machine_epsilon * (sum of absolute values of terms)
     # so we want to use the variant that adds the smaller terms.
-    scale_fp64 = scale.to(torch.float32)
+    scale_fp64 = scale.to(scale_dtype)
     zero_point_from_min = qmin - (row_min_val / scale_fp64)
     if minimize_error:
         zero_point_from_max = qmax - (row_max_val / scale_fp64)
