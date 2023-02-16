@@ -73,7 +73,15 @@ def get_big_shapes():
     for i, (d_model, dim_feedforward) in enumerate(
         itertools.product([8192, 16384], [8192, 16384])
     ):
-        yield (d_model, dim_feedforward, f"big{i}")
+        yield (d_model, dim_feedforward, f"big_zucchini{i}")
+    for i, (d_model, dim_feedforward) in enumerate(
+        itertools.product([10240, 20480], [20480, 10240])
+    ):
+        yield (d_model, dim_feedforward, f"big_genesis{i}")
+    for i, (d_model, dim_feedforward) in enumerate(
+        itertools.product([6144, 12288], [12288, 6144])
+    ):
+        yield (d_model, dim_feedforward, f"big_opt{i}")
 
 
 def get_opt_shapes():
