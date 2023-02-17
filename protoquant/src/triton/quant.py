@@ -27,7 +27,9 @@ def _reenter_functionalization():
         )
 
 
-def quant_kernel(inputs):
+def quant_kernel(
+    inputs, minimize_error=True, nudge_to_zero=True, scale_dtype=torch.float64
+):
     # Writing out these values as constants
     # precision = 8
     # qmin = ((1 << (precision - 1)) * -1)
@@ -49,7 +51,7 @@ def quant_kernel(inputs):
 
     # Use double precision for intermediate computation but use single precision
     # in final number to reflect the actual number used during quantization.
-    scale = ((row_max_val.to(torch.float64) - row_min_val) / (qmax - qmin)).to(
+    scale = ((row_max_val.to(scale_dtype) - row_min_val) / (qmax - qmin)).to(
         torch.float32
     )
 
@@ -66,10 +68,11 @@ def quant_kernel(inputs):
     amplifier = SMALL_SCALE_THRESHOLD / scale
     scale = torch.where(is_small_scale, SMALL_SCALE_THRESHOLD, scale)
 
-    # Unconditionally create amplified variant for small scales
-    row_max_val_amplified = torch.where(
-        is_small_scale, amplifier * row_max_val, row_max_val
-    ).to(torch.float32)
+    # # Unconditionally create amplified variant for small scales
+    if minimize_error:
+        row_max_val_amplified = torch.where(
+            is_small_scale, amplifier * row_max_val, row_max_val
+        ).to(torch.float32)
     row_min_val_amplified = torch.where(
         is_small_scale, amplifier * row_min_val, row_min_val
     ).to(torch.float32)
@@ -83,7 +86,8 @@ def quant_kernel(inputs):
     # row_min_val_amplified = tl.where(tl.minimum(is_small_scale, is_row_max_val_zero),
     #                        -SMALL_SCALE_THRESHOLD * (qmax_val - qmin_val), row_min_val)
 
-    row_max_val = row_max_val_amplified
+    if minimize_error:
+        row_max_val = row_max_val_amplified
     row_min_val = row_min_val_amplified
 
     # Zero-point computation.
@@ -94,17 +98,20 @@ def quant_kernel(inputs):
     # The arithmetic error on the zero point computed from either pair
     # will be roughly machine_epsilon * (sum of absolute values of terms)
     # so we want to use the variant that adds the smaller terms.
-    scale_fp64 = scale.to(torch.float64)
+    scale_fp64 = scale.to(scale_dtype)
     zero_point_from_min = qmin - (row_min_val / scale_fp64)
-    zero_point_from_max = qmax - (row_max_val / scale_fp64)
-    zero_point_from_min_error = abs(qmin) + torch.abs(row_min_val / scale_fp64)
-    zero_point_from_max_error = abs(qmax) + torch.abs(row_max_val / scale_fp64)
+    if minimize_error:
+        zero_point_from_max = qmax - (row_max_val / scale_fp64)
+        zero_point_from_min_error = abs(qmin) + torch.abs(row_min_val / scale_fp64)
+        zero_point_from_max_error = abs(qmax) + torch.abs(row_max_val / scale_fp64)
 
-    initial_zero_point = torch.where(
-        zero_point_from_min_error < zero_point_from_max_error,
-        zero_point_from_min,
-        zero_point_from_max,
-    )
+        initial_zero_point = torch.where(
+            zero_point_from_min_error < zero_point_from_max_error,
+            zero_point_from_min,
+            zero_point_from_max,
+        ).to(torch.int32)
+    else:
+        initial_zero_point = zero_point_from_min.to(torch.int32)
 
     # Now we need to nudge the zero point to be an integer
     # (our zero points are integer, and this is motivated by the requirement
@@ -114,9 +121,16 @@ def quant_kernel(inputs):
     # TODO: Using torch.round for nearbyint. If there are accuracy issues, this
     # might be worth investigating in more depth.
     # nudged_zero_point = tl.libdevice.nearbyint(initial_zero_point).to(tl.int32)
-    nudged_zero_point = torch.round(initial_zero_point).to(torch.int32)
-    nudged_zero_point = torch.where(initial_zero_point < qmin, qmin, nudged_zero_point)
-    nudged_zero_point = torch.where(initial_zero_point > qmax, qmax, nudged_zero_point)
+    if nudge_to_zero:
+        nudged_zero_point = torch.round(initial_zero_point).to(torch.int32)
+        nudged_zero_point = torch.where(
+            initial_zero_point < qmin, qmin, nudged_zero_point
+        )
+        nudged_zero_point = torch.where(
+            initial_zero_point > qmax, qmax, nudged_zero_point
+        )
+    else:
+        nudged_zero_point = initial_zero_point
 
     inv_scale = 1.0 / scale
     precomputed_sum = torch.round(row_sum_val * inv_scale).to(torch.int32)
@@ -128,7 +142,13 @@ def quant_kernel(inputs):
     return mins, maxs, scale_fp64, nudged_zero_point, precomputed_sum, output
 
 
-def quant(inputs, dim):
+def quant(inputs, dim, minimize_error):
     assert dim == 1
     n_rows, n_cols = inputs.shape
-    return quant_kernel(inputs)
+    scale_dtype = torch.float64 if minimize_error else torch.float32
+    return quant_kernel(
+        inputs,
+        minimize_error=minimize_error,
+        nudge_to_zero=minimize_error,
+        scale_dtype=scale_dtype,
+    )
