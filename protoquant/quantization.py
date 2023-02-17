@@ -35,7 +35,7 @@ def qntz(
     pad_0 = pad(m) - m if do_pad else 0
     pad_1 = pad(n) - n if do_pad else 0
 
-    if rowwise and not transpose and pad_0 == 0 and pad_1 == 0:
+    if rowwise and not transpose: # and pad_0 == 0 and pad_1 == 0:
         mins, maxs, scales, zeros, sums, out = quant(input, 1, minimize_error)
         params = QParams(scales, zeros, sums, rowwise, transpose, dtype, pad_0, pad_1)
         return (out, params)
@@ -90,7 +90,7 @@ def dqntz(
         )
         return out
 
-    if mat1_params.pad_0 == 0 and mat2_params.pad_1 == 0:
+    if True: # mat1_params.pad_0 == 0 and mat2_params.pad_1 == 0:
         return dequant(
             input,
             other,
