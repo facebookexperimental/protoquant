@@ -10,10 +10,9 @@ from triton.testing import get_dram_gbps, get_max_simd_tflops, get_max_tensorcor
 def get_tensorcore_tflops(backend, device, num_ctas, num_warps, dtype):
     """return compute throughput in TOPS"""
     total_warps = num_ctas * min(num_warps, 4)
-    triton.compiler.init_cuda_utils()
 
     num_subcores = (
-        triton.compiler.cuda_utils.get_device_properties(device)["multiprocessor_count"]
+        triton.runtime.driver.utils.get_device_properties(device)["multiprocessor_count"]
         * 4
     )  # on recent GPUs
     tflops = (
@@ -28,7 +27,7 @@ def get_simd_tflops(backend, device, num_ctas, num_warps, dtype):
     """return compute throughput in TOPS"""
     total_warps = num_ctas * min(num_warps, 4)
     num_subcores = (
-        triton.compiler.cuda_utils.get_device_properties(device)["multiprocessor_count"]
+        triton.runtime.driver.utils.get_device_properties(device)["multiprocessor_count"]
         * 4
     )  # on recent GPUs
     tflops = (
@@ -84,7 +83,7 @@ def estimate_matmul_time(
     compute_ms = total_ops / tput
 
     # time to load data
-    num_sm = triton.compiler.cuda_utils.get_device_properties(device)[
+    num_sm = triton.runtime.driver.utils.get_device_properties(device)[
         "multiprocessor_count"
     ]
     active_cta_ratio = min(1, num_ctas / num_sm)
@@ -150,8 +149,7 @@ def early_config_prune(configs, named_args):
         )
 
         # TODO: move to `cuda_utils` submodule
-        triton.compiler.init_cuda_utils()
-        max_shared_memory = triton.compiler.cuda_utils.get_device_properties(device)[
+        max_shared_memory = triton.runtime.driver.utils.get_device_properties(device)[
             "max_shared_mem"
         ]
         required_shared_memory = (BLOCK_M + BLOCK_N) * BLOCK_K * num_stages * dtsize
