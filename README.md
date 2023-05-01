@@ -16,7 +16,7 @@ dynamic inference with PyTorch.
 
 You need to clone the repo with recursive submodules.
 
-`git clone --recurse-submodules git@github.com:facebookexperimental/protoquant.git`
+`git clone --recurse-submodules https://github.com/facebookexperimental/protoquant.git`
 
 If you forget to, you can always fix this using [this
 trick](https://gist.github.com/cnlohr/04de6edd3e2a75face0a68c53be2017e)
