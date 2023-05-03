@@ -6,17 +6,17 @@ def safe_int_mm(x_int8: torch.Tensor, w_int8: torch.Tensor):
     This function wraps torch._int_mm and avoids several undesirable behaviors of the function for certain inputs while still 
     returning correct results and being torch.compiled in a performant way.
 
-    Assumes both tensors have dimension of 2 and have dtype torch.int8
+    Assumes both tensors have dimension of 2.
     
     Note: no error checking for torch.compiled path, if x_int8.shape = [i, j] and j<=16 then the triton kernel
     will silently give incorrect results
 
     Args:
-        x_int8: the first tensor to be multiplied
-        w_int8: the second tensor to be multiplied
+        x_int8 (Tensor, torch.int8): the first tensor to be multiplied
+        w_int8 (Tensor, torch.int8): the second tensor to be multiplied
 
     Return:
-        the output tensor of the matmul with dtype torch.int32 and device matching that of the inputs
+        out (Tensor, torch.int32): the result of the matmul with device matching that of the inputs
     """
 
     # torch.compile path

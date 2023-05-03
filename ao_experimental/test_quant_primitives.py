@@ -46,45 +46,34 @@ class TestSafeIntMM(unittest.TestCase):
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             self._test_safe_int_mm_impl(x, w)
 
-    def test_safe_int_mm_cuda_non_contiguous_mat2(self):
+    def test_safe_int_mm_cuda_non_contiguous_w(self):
         for x_shape, w_shape in self.test_shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cuda')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
-    def test_safe_int_mm_cpu_non_contiguous_mat2(self):
+    def test_safe_int_mm_cpu_non_contiguous_w(self):
         for x_shape, w_shape in self.test_shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cpu')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
-    def test_safe_int_mm_cuda_non_contiguous_input(self):
+    def test_safe_int_mm_cuda_non_contiguous_x(self):
         for x_shape, w_shape in self.test_shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cuda')
             assert not x.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
-    def test_safe_int_mm_cpu_non_contiguous_input(self):
+    def test_safe_int_mm_cpu_non_contiguous_x(self):
         for x_shape, w_shape in self.test_shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             assert not x.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
-# class TestQuantInt8MatMul(unittest.TestCase):
-
-#     def _test_quant_int8_matmul_impl(self,
-#         x_vals_int8,
-#         x_scale,
-#         x_zp,
-#         w_vals_int8_t,
-#         w_scales,
-#         out_dtype=torch.float32,):
-#         w_vals_int8_t_sums_int64 = w_vals_int8_t.sum(dim=0)
-#         x_scale = 
 
 if __name__ == "__main__":
     unittest.main()
