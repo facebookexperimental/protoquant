@@ -1,7 +1,62 @@
 import torch
 
 import unittest
-from quant_primitives import safe_int_mm
+from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm
+
+torch.manual_seed(0)
+
+class TestPerTensorQuantization(unittest.TestCase):
+    """ 
+    Tests the dynamically_quantize_per_tensor function across a variety of input cases and ensures numerics match ao version
+    """
+    shapes = (
+        (1, 1, 32 , 32),
+        (32, 16, 64, 64),
+        (100, 100),
+        (1, 200, 200),
+    )
+    def _test_dynamically_quantize_per_tensor_impl(self, device, quant_min = -128, quant_max = 127, target_dtype = torch.int8, tol = 0):
+        for x_shape in self.shapes:
+            x = torch.randn(x_shape, device=device)*1000
+            
+            x_int8, scale, zero_point = dynamically_quantize_per_tensor(x, quant_min, quant_max, target_dtype)
+            
+            q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+            x_q = torch.quantize_per_tensor_dynamic(x, dtype = q_dtype, reduce_range = False)
+            
+            self.assertEqual(scale.item(), x_q.q_scale())
+            self.assertEqual(zero_point.item(), x_q.q_zero_point())
+            self.assertGreaterEqual(tol, (x_int8.to(torch.int32)-x_q.int_repr().to(torch.int32)).abs().max())
+
+            if device == 'cuda':
+                trit_dynamic_quant = torch.compile(dynamically_quantize_per_tensor, mode='max-autotune')
+                trit_x_int8, trit_scale, trit_zp = trit_dynamic_quant(x, quant_min, quant_max, target_dtype)
+                self.assertEqual(trit_scale.item(), scale.item())
+                self.assertEqual(trit_zp.item(), x_q.q_zero_point())
+                self.assertGreaterEqual(0, (trit_x_int8.to(torch.int32)-x_q.int_repr().to(torch.int32)).abs().max())
+
+
+    def test_dynamically_quantize_per_tensor_cuda_int8(self):
+            self._test_dynamically_quantize_per_tensor_impl(
+                device = 'cuda', quant_min = -128, quant_max = 127, target_dtype = torch.int8
+            )
+
+    def test_dynamically_quantize_per_tensor_cuda_uint8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+           device = 'cuda', quant_min = 0, quant_max = 255, target_dtype = torch.uint8
+        )
+
+    # CPU quantization has slightly different numerics than cuda, we chose to match cuda and
+    # have all int values be within 1 of cpu
+    def test_dynamically_quantize_per_tensor_cpu_int8(self):
+            self._test_dynamically_quantize_per_tensor_impl(
+                device = 'cpu', quant_min = -128, quant_max = 127, target_dtype = torch.int8, tol = 1
+            )
+
+    def test_dynamically_quantize_per_tensor_cpu_uint8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+           device = 'cpu', quant_min = 0, quant_max = 255, target_dtype = torch.uint8, tol = 1
+        )
 
 class TestSafeIntMM(unittest.TestCase):
     """ 
