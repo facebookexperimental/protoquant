@@ -1,5 +1,6 @@
 import torch
 from torch import _dynamo
+from typing import Union
 
 # copy-pasta of https://www.internalfb.com/intern/anp/view/?id=3350736
 def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quant_max: int=127, target_dtype: torch.dtype = torch.int8):
@@ -47,7 +48,7 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
 
 def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant_max: int=127, target_dtype: torch.dtype = torch.int8, axis: int = 0):
     """
-    This function dynamically quantizes the tensor x but returns the 
+    This function dynamically quantizes the tensor x by channel but returns the 
     int tensor, scale and zero_point separately to more easily enable int8 gpu quantization.
 
     Assumes symmetric quantization
@@ -80,10 +81,9 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
     min_val, max_val = get_min_max_per_channel(x, axis=axis)
 
     # calculate scales and zero point based on min and max
-    # reference: https://fburl.com/code/4wll53rk
+    # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
     max_val_pos = torch.max(max_val, -min_val)
     
-    # reference: https://fburl.com/code/srbiybme
     scales = 2*max_val_pos.to(torch.float64) / torch.tensor([quant_max - quant_min], device=x.device).to(torch.float64)
     # ensure scales is the same dtype as the original tensor
     scales = torch.clamp(scales, min=eps)
@@ -97,10 +97,46 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
     # x_div = x.transpose(axis, -1) * inv_scales
     x_round = torch.round(x_div)
     x_zp = x_round + zero_points
-    x_zp = x_zp.transpose(axis, -1)
+    x_zp = x_zp.transpose(0, axis)
     x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
 
     return x_q, scales, zero_points
+
+# reference: https://fburl.com/code/vfsygwd0
+def dequantize_per_tensor(int_repr: torch.IntTensor, scale: Union[torch.Tensor, float], zero_point: Union[torch.Tensor, int], out_dtype=torch.float32):
+    """This function works alongside dynamically_quantize_per_tensor to obtain a floating point tensor from a quantized tensor
+    
+    Args:
+        int_repr (Tensor): the integer representation of the quantized tensor being dequantized
+        scale (Union[torch.Tensor, float]): scale value for quantized tensor (can be a tensor or scalar)
+        zero_point (Union[torch.Tensor, int]): zero point for quantized tensor (can be a tensor or scalar)
+        out_dtype (dtype): desired dtype for output tensor
+
+    Return:
+        x (Tensor): the resulting float tensor with dtype of out_dtype
+    """
+    return (int_repr.to(out_dtype) - zero_point) * scale
+
+# reference: https://fburl.com/code/org0fmi3
+def dequantize_per_channel(int_repr: torch.Tensor, scales: torch.Tensor, zero_points: torch.Tensor, out_dtype=torch.float32, axis: int=0):
+    """This function works alongside dynamically_quantize_per_tensor to obtain a floating point tensor from a quantized tensor
+    
+    Args:
+        int_repr (Tensor): the integer representation of the quantized tensor being dequantized
+        scales (Tensor): float tensor of scales for each channel
+        zero_points (Tensor): integer tensor for zero point for each channel
+        out_dtype (dtype): desired dtype for output tensor
+        axis (int): the channel axis
+
+    Return:
+        x (Tensor): the resulting float tensor with dtype of out_dtype
+    """
+    y = int_repr.transpose(-1, axis)
+    y = y.to(out_dtype)
+    y = y - zero_points
+    y = y * scales.to(out_dtype)
+    y = y.transpose(-1, axis)
+    return y
 
 def safe_int_mm(x_int8: torch.Tensor, w_int8: torch.Tensor):
     """
