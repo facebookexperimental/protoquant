@@ -45,6 +45,62 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
 
     return x_q, scale.item(), zero_point.item()
 
+def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant_max: int=127, target_dtype: torch.dtype = torch.int8, axis: int = 0):
+    """
+    This function dynamically quantizes the tensor x but returns the 
+    int tensor, scale and zero_point separately to more easily enable int8 gpu quantization.
+
+    Assumes symmetric quantization
+
+    Args:
+        x (Tensor): the tensor being quantized
+        quant_min (int): minimum integer value desired for quantized output
+        quant_max (int): maximum integer value desired for quantized output
+        target_dtype (dtype): desired dtype for output tensor
+        axis (int): the channel axis
+
+    Return:
+        x_q (Tensor): the resulting integer tensor with dtype of target_dtype
+        scale (FloatTensor): the dynamically calculated scale (float64)
+        zero_point (IntTensor): the dynamically calculated zero_point (int64)
+    """
+
+    # default setup for affine quantization of activations
+    eps = torch.finfo(torch.float32).eps
+
+    # get min and max
+    def get_min_max_per_channel(x: torch.Tensor, axis: int):
+        new_axis_list = [i for i in range(len(x.shape))]
+        new_axis_list[axis] = 0
+        new_axis_list[0] = axis
+        x2 = x.permute(new_axis_list)
+        x2 = torch.flatten(x2, start_dim = 1)
+        return torch.aminmax(x2, dim = 1)
+
+    min_val, max_val = get_min_max_per_channel(x, axis=axis)
+
+    # calculate scales and zero point based on min and max
+    # reference: https://fburl.com/code/4wll53rk
+    max_val_pos = torch.max(max_val, -min_val)
+    
+    # reference: https://fburl.com/code/srbiybme
+    scales = 2*max_val_pos.to(torch.float64) / torch.tensor([quant_max - quant_min], device=x.device).to(torch.float64)
+    # ensure scales is the same dtype as the original tensor
+    scales = torch.clamp(scales, min=eps)
+    zero_points = torch.zeros(max_val_pos.size(), dtype=torch.int64, device=x.device)+128+quant_min
+
+    # quantize based on qmin/qmax/scales/zp
+    # reference: https://www.internalfb.com/code/fbsource/[8edc275012b1]/fbcode/caffe2/torch/ao/quantization/fx/_decomposed.py?lines=63
+    x_div = x.transpose(axis, -1) / scales
+    # note: quantize_per_channel uses inv_scale method of calculation with a float32 but thats slightly less accurate
+    # inv_scales = 1/scales
+    # x_div = x.transpose(axis, -1) * inv_scales
+    x_round = torch.round(x_div)
+    x_zp = x_round + zero_points
+    x_zp = x_zp.transpose(axis, -1)
+    x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
+
+    return x_q, scales, zero_points
 
 def safe_int_mm(x_int8: torch.Tensor, w_int8: torch.Tensor):
     """
