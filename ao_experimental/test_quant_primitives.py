@@ -2,7 +2,7 @@ import torch
 
 import unittest
 from itertools import cycle
-from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm, dynamically_quantize_per_channel, dequantize_per_tensor, dequantize_per_channel
+from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm, dynamically_quantize_per_channel, dequantize_per_tensor, dequantize_per_channel, quant_int8_matmul
 
 torch.manual_seed(0)
 
@@ -237,6 +237,47 @@ class TestPerTensorQuantization(unittest.TestCase):
         self._test_dynamically_quantize_per_tensor_impl(
            device = 'cpu', quant_min = 0, quant_max = 255, target_dtype = torch.uint8, tol = 1
         )
+
+class TestQuantInt8MatMul(unittest.TestCase):
+    shapes = (
+        # ((x_shape), (w_shape))
+        ((1, 1, 32 , 32),(20, 32)),
+        ((32, 16, 64, 64),(16, 64)),
+        ((100, 100),(2, 100)),
+        ((1, 200, 200),(100, 200)),
+    )
+    def _test_quant_int8_matmul_impl(self, device):
+        # x_vals_int8,
+        # x_scale,
+        # x_zp,
+        # w_int8_t,
+        # w_int8_t_sums_int64,
+        # w_scales,
+        # out_dtype=torch.float32,
+        out_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        for x_shape, w_shape in self.shapes:
+            for contiguous_x in [True]:#, False]:
+                for contiguous_w in [True]:#, False]:
+                    out_dtype = next(out_dtypes)
+                    
+                    x = torch.randn(x_shape, device=device)
+                    x_vals_int8, x_scale, x_zp = dynamically_quantize_per_tensor(x)
+
+                    lin = torch.nn.Linear(in_features = w_shape[1], out_features = w_shape[0], bias=False).to(device)
+                    lin.qconfig = torch.ao.quantization.default_per_channel_qconfig
+                    lin.activation_post_process = lin.qconfig.activation(dtype = torch.quint8, quant_min = 0, quant_max=255)
+                    lin.activation_post_process(lin(x))
+                    qlinear = torch.ao.nn.quantized.modules.Linear.from_float(lin)
+
+            
+                    w_int8_t, w_scales, _ = dynamically_quantize_per_channel(lin.weight.transpose(0,1))
+                    w_int8_t_sums_int64 = w_int8_t.sum(d=0)
+                    y = quant_int8_matmul(x_vals_int8, x_scale, x_zp, w_int8_t, w_int8_t_sums_int64, w_scales, out_dtype)
+                    y_ref = torch.nn.functional.linear(x, w)
+
+                    torch.testing.assert_close()
+
+
 
 class TestSafeIntMM(unittest.TestCase):
     """ 
