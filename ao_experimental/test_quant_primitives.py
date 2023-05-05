@@ -7,7 +7,7 @@ class TestSafeIntMM(unittest.TestCase):
     """ 
     Tests the safe_int_mm functionality/correctness across a variety of input cases  
     """
-    test_shapes = (
+    shapes = (
         # ((x_shape), (w_shape))
         ((8, 17), (17, 8)), # break cublas but not triton (fallback)
         ((17, 24), (24, 8)), # smallest test that doesn't need fallback
@@ -35,40 +35,40 @@ class TestSafeIntMM(unittest.TestCase):
                 )
 
     def test_safe_int_mm_cuda(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cuda')
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cuda')
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cpu')
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cuda_non_contiguous_w(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cuda')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu_non_contiguous_w(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cpu')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cuda_non_contiguous_x(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cuda')
             assert not x.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu_non_contiguous_x(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             assert not x.is_contiguous()
