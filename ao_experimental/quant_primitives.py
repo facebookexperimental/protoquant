@@ -17,7 +17,7 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
 
     Return:
         x_q (Tensor): the resulting integer tensor with dtype of target_dtype
-        scale (float64): the dynamically calculated scale, a float64
+        scale (float64): the dynamically calculated scale
         zero_point (int32): the dynamically calculated zero_point
     """
     # default setup for affine quantization of activations
@@ -43,7 +43,7 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
     # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
     x_q = torch.clamp(torch.round(x / scale) + zero_point, quant_min, quant_max).to(target_dtype)
 
-    return x_q, scale, zero_point
+    return x_q, scale.item(), zero_point.item()
 
 
 def safe_int_mm(x_int8: torch.Tensor, w_int8: torch.Tensor):

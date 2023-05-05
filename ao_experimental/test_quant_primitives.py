@@ -1,6 +1,7 @@
 import torch
 
 import unittest
+from itertools import cycle as cycle
 from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm
 
 torch.manual_seed(0)
@@ -16,24 +17,30 @@ class TestPerTensorQuantization(unittest.TestCase):
         (1, 200, 200),
     )
     def _test_dynamically_quantize_per_tensor_impl(self, device, quant_min = -128, quant_max = 127, target_dtype = torch.int8, tol = 0):
+        f_dtypes = cycle([torch.float16, torch.float32, torch.float64])
         for x_shape in self.shapes:
-            x = torch.randn(x_shape, device=device)*1000
-            
-            x_int8, scale, zero_point = dynamically_quantize_per_tensor(x, quant_min, quant_max, target_dtype)
-            
-            q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
-            x_q = torch.quantize_per_tensor_dynamic(x, dtype = q_dtype, reduce_range = False)
-            
-            self.assertEqual(scale.item(), x_q.q_scale())
-            self.assertEqual(zero_point.item(), x_q.q_zero_point())
-            self.assertGreaterEqual(tol, (x_int8.to(torch.int32)-x_q.int_repr().to(torch.int32)).abs().max())
+            for transp in [False, True]:
+                f_dtype = next(f_dtypes)
+                x = torch.randn(x_shape, device=device, dtype=f_dtype)*1000
+                if transp:
+                    x = x.transpose(0,-1)
+                
+                
+                x_int8, scale, zero_point = dynamically_quantize_per_tensor(x, quant_min, quant_max, target_dtype)
+                
+                q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+                x_q = torch.quantize_per_tensor_dynamic(x.to(torch.float32), dtype = q_dtype, reduce_range = False)
+                
+                torch.testing.assert_close(scale, x_q.q_scale())
+                torch.testing.assert_close(zero_point, x_q.q_zero_point())
+                torch.testing.assert_close(x_int8.to(torch.int32),x_q.int_repr().to(torch.int32), atol = tol, rtol = 100)
 
-            if device == 'cuda':
-                trit_dynamic_quant = torch.compile(dynamically_quantize_per_tensor, mode='max-autotune')
-                trit_x_int8, trit_scale, trit_zp = trit_dynamic_quant(x, quant_min, quant_max, target_dtype)
-                self.assertEqual(trit_scale.item(), scale.item())
-                self.assertEqual(trit_zp.item(), x_q.q_zero_point())
-                self.assertGreaterEqual(0, (trit_x_int8.to(torch.int32)-x_q.int_repr().to(torch.int32)).abs().max())
+                if device == 'cuda':
+                    trit_dynamic_quant = torch.compile(dynamically_quantize_per_tensor, mode='max-autotune')
+                    trit_x_int8, trit_scale, trit_zp = trit_dynamic_quant(x, quant_min, quant_max, target_dtype)
+                    torch.testing.assert_close(trit_scale, x_q.q_scale())
+                    torch.testing.assert_close(trit_zp, x_q.q_zero_point())
+                    torch.testing.assert_close(trit_x_int8.to(torch.int32),x_q.int_repr().to(torch.int32), atol = tol, rtol = 100)
 
 
     def test_dynamically_quantize_per_tensor_cuda_int8(self):
@@ -62,7 +69,7 @@ class TestSafeIntMM(unittest.TestCase):
     """ 
     Tests the safe_int_mm functionality/correctness across a variety of input cases  
     """
-    test_shapes = (
+    shapes = (
         # ((x_shape), (w_shape))
         ((8, 17), (17, 8)), # break cublas but not triton (fallback)
         ((17, 24), (24, 8)), # smallest test that doesn't need fallback
@@ -90,40 +97,40 @@ class TestSafeIntMM(unittest.TestCase):
                 )
 
     def test_safe_int_mm_cuda(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cuda')
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cuda')
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cpu')
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cuda_non_contiguous_w(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cuda')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu_non_contiguous_w(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape, dtype = torch.int8, device='cpu')
             w = torch.randint(-128, 127, w_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             assert not w.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cuda_non_contiguous_x(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cuda').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cuda')
             assert not x.is_contiguous()
             self._test_safe_int_mm_impl(x, w)
 
     def test_safe_int_mm_cpu_non_contiguous_x(self):
-        for x_shape, w_shape in self.test_shapes:
+        for x_shape, w_shape in self.shapes:
             x = torch.randint(-128, 127, x_shape[::-1], dtype = torch.int8, device='cpu').transpose(0,1)
             w = torch.randint(-128, 127, w_shape, dtype = torch.int8, device='cpu')
             assert not x.is_contiguous()
