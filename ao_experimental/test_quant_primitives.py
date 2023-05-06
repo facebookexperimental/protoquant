@@ -1,8 +1,8 @@
 import torch
 
 import unittest
+from quant_primitives import safe_int_mm, dynamically_quantize_per_tensor
 from itertools import cycle as cycle
-from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm
 
 torch.manual_seed(0)
 
@@ -32,14 +32,14 @@ class TestPerTensorQuantization(unittest.TestCase):
                 x_q = torch.quantize_per_tensor_dynamic(x.to(torch.float32), dtype = q_dtype, reduce_range = False)
                 
                 torch.testing.assert_close(scale, x_q.q_scale())
-                torch.testing.assert_close(zero_point, x_q.q_zero_point())
+                torch.testing.assert_close(zero_point, x_q.q_zero_point(), atol=0, rtol=0)
                 torch.testing.assert_close(x_int8.to(torch.int32),x_q.int_repr().to(torch.int32), atol = tol, rtol = 100)
 
                 if device == 'cuda':
                     trit_dynamic_quant = torch.compile(dynamically_quantize_per_tensor, mode='max-autotune')
                     trit_x_int8, trit_scale, trit_zp = trit_dynamic_quant(x, quant_min, quant_max, target_dtype)
                     torch.testing.assert_close(trit_scale, x_q.q_scale())
-                    torch.testing.assert_close(trit_zp, x_q.q_zero_point())
+                    torch.testing.assert_close(trit_zp, x_q.q_zero_point(), atol=0, rtol=0)
                     torch.testing.assert_close(trit_x_int8.to(torch.int32),x_q.int_repr().to(torch.int32), atol = tol, rtol = 100)
 
 
