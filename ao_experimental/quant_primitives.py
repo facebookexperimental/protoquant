@@ -97,7 +97,7 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
     # x_div = x.transpose(axis, -1) * inv_scales
     x_round = torch.round(x_div)
     x_zp = x_round + zero_points
-    x_zp = x_zp.transpose(0, axis)
+    x_zp = x_zp.transpose(axis, -1)
     x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
 
     return x_q, scales, zero_points
@@ -138,7 +138,7 @@ def dequantize_per_channel(int_repr: torch.Tensor, scales: torch.Tensor, zero_po
     y = y.transpose(-1, axis)
     return y
 
-class dynamically_quantized_linear(torch.nn.Module):
+class DynamicallyQuantizedLinear(torch.nn.Module):
     def __init__(
         self,    
         w_int8_t,
@@ -148,8 +148,9 @@ class dynamically_quantized_linear(torch.nn.Module):
         x_q_dtype = torch.int8,
         out_dtype=torch.float32,
     ):
+        super().__init__()
         self.register_buffer('w_int8_t', w_int8_t)
-        self.register_buffer('w_int8_t_sums_int64', w_int8_t.sum(dim=0))
+        self.register_buffer('w_int8_t_sums_int64', w_int8_t.sum(dim=0).to(torch.int64))
         self.register_buffer('w_scales', w_scales)
         self.register_buffer('bias', None)
         self.out_dtype = out_dtype
@@ -173,11 +174,10 @@ class dynamically_quantized_linear(torch.nn.Module):
     @classmethod
     def from_float(cls, mod, w_quant_min = -128, w_quant_max = 127, w_q_dtype = torch.int8 , w_axis = 0, x_quant_min = -128, x_quant_max = 127, x_q_dtype = torch.int8, out_dtype = torch.float32):
         assert isinstance(mod, torch.nn.Linear), f"need mod to be type torch.nn.Linear but got {type(mod)}"
-        w_int8_t, w_scales, _ = dynamically_quantize_per_channel(mod.weight.transpose(0,1), quant_min = w_quant_min, quant_max = w_quant_max, target_dtype=w_q_dtype, axis = w_axis)
-        new_qlinear = cls(w_int8_t, w_scales, True if mod.bias else False, x_quant_min, x_quant_max, x_q_dtype, out_dtype)
-        if mod.bias:
+        w_int8, w_scales, _ = dynamically_quantize_per_channel(mod.weight, quant_min = w_quant_min, quant_max = w_quant_max, target_dtype=w_q_dtype, axis = w_axis)
+        new_qlinear = cls(w_int8.transpose(0,1), w_scales, x_quant_min, x_quant_max, x_q_dtype, out_dtype)
+        if mod.bias is not None:
             new_qlinear.bias = mod.bias
-        assert new_qlinear.bias is None or new_qlinear.bias.dtype == out_dtype, f"new bias to be None or have dtype matching out_dtype but got {new_qlinear.bias.dtype}"
         return new_qlinear
 
 def quant_int8_dynamic_linear(
@@ -201,7 +201,7 @@ def quant_int8_dynamic_linear(
         w_scales, out_dtype)
     if bias is not None:
         mm_out += bias
-    return mm_out
+    return mm_out.to(out_dtype)
 
 def quant_int8_matmul(
     x_vals_int8,
@@ -231,12 +231,12 @@ def quant_int8_matmul(
     # note: [1_mat . W_int] is w_int8_t_sums_int64 where 1_mat
     # note: ws is a rank 1 tensor so ws' just indicates aligning it correctly
 
-    assert x_vals_int8.dtype in (torch.int8), \
+    assert x_vals_int8.dtype == torch.int8, \
         f'x dtype {x_vals_int8.dtype} not yet supported'
     assert w_int8_t.dtype == torch.int8, \
         f'w dtype {w_int8_t.dtype} not yet supported'
-    assert w_scales.dtype == out_dtype, \
-        f'{w_scales.dtype} does not match {out_dtype}'
+    # assert w_scales.dtype == out_dtype, \
+    #     f'{w_scales.dtype} does not match {out_dtype}'
 
     #
     # 1. calculate [X_int . W_int]
@@ -251,7 +251,7 @@ def quant_int8_matmul(
     # TBD if that is actually faster on GPUs
     # need to use 32 bits here to prevent overflow for large shapes,
     # 16 bits is not enough
-    XW_float32 = XW_float32.to(torch.float32)
+    XW_float32 = XW_int32.to(torch.float32)
 
     #
     # 2. connect it all together

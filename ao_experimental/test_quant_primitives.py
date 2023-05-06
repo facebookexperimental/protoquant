@@ -1,10 +1,79 @@
 import torch
-
+import torch.nn as nn
 import unittest
-from itertools import cycle
-from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm, dynamically_quantize_per_channel, dequantize_per_tensor, dequantize_per_channel, quant_int8_matmul
+from quant_primitives import safe_int_mm, dynamically_quantize_per_tensor, dynamically_quantize_per_channel, dequantize_per_tensor, dequantize_per_channel, quant_int8_matmul, quant_int8_dynamic_linear, DynamicallyQuantizedLinear
+from itertools import cycle as cycle
+from torch.testing._internal.common_quantization import LinearModelWithSubmodule, LinearReluLinearModel, LinearAddModel
+import copy
 
 torch.manual_seed(0)
+
+def SQNR(x, y):
+    Ps = torch.norm(x)
+    Pn = torch.norm(x-y)
+    return 20*torch.log10(Ps/Pn)
+
+class TwoLayerLinearModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = torch.nn.Linear(24, 32).to(dtype=torch.float)
+        self.fc2 = torch.nn.Linear(32, 64).to(dtype=torch.float)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x
+
+class TestModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.subm = TwoLayerLinearModel()
+        self.fc = nn.Linear(64, 32)
+
+    def forward(self, x):
+        x = self.subm(x)
+        x = self.fc(x)
+        return x
+    
+    def get_example_input(self):
+        return torch.randn(2, 5, 24)
+
+class EndToEndTest(unittest.TestCase):
+
+    def _test_end_to_end_impl(self, device):
+        model = TestModel().to(device).eval() # model needs to be big enough that triton doesn't error
+        q_model = copy.deepcopy(model)
+
+        print(model)
+        def convert_modules(model, targets, convert_function):
+            for name, module in model.named_children():
+                if type(module) in targets:
+                    new_mod = convert_function(module)
+                    setattr(model, name, new_mod)
+                else:
+                    convert_modules(module, targets, convert_function)
+
+        convert_modules(q_model, [torch.nn.Linear], DynamicallyQuantizedLinear.from_float)
+        print(q_model)
+        if device == 'cuda':
+            trit_model = copy.deepcopy(model)
+            convert_modules(trit_model, [torch.nn.Linear], DynamicallyQuantizedLinear.from_float)
+            convert_modules(trit_model, [DynamicallyQuantizedLinear], lambda mod: torch.compile(mod, mode='max-autotune'))
+            print(trit_model)
+        for i in range(5):
+            x = model.get_example_input().to(device)
+            y_ref = model(x)
+            y = q_model(x)
+            self.assertGreater(SQNR(y_ref, y), 35)
+            if device == 'cuda':
+                y_trit = trit_model(x)
+                self.assertGreater(SQNR(y_ref, y_trit), 35)
+
+    def test_end_to_end_cuda(self):
+        self._test_end_to_end_impl('cuda')
+
+    def test_end_to_end_cpu(self):
+        self._test_end_to_end_impl('cpu')       
 
 class TestDequantizePerChannel(unittest.TestCase):
     shapes = (
@@ -241,43 +310,152 @@ class TestPerTensorQuantization(unittest.TestCase):
 class TestQuantInt8MatMul(unittest.TestCase):
     shapes = (
         # ((x_shape), (w_shape))
-        ((1, 1, 32 , 32),(20, 32)),
+        ((3, 2, 32 , 32),(20, 32)),
         ((32, 16, 64, 64),(16, 64)),
         ((100, 100),(2, 100)),
-        ((1, 200, 200),(100, 200)),
+        ((3, 200, 200),(100, 200)),
     )
     def _test_quant_int8_matmul_impl(self, device):
-        # x_vals_int8,
-        # x_scale,
-        # x_zp,
-        # w_int8_t,
-        # w_int8_t_sums_int64,
-        # w_scales,
-        # out_dtype=torch.float32,
         out_dtypes = cycle([torch.float16, torch.float32, torch.float64])
         for x_shape, w_shape in self.shapes:
-            for contiguous_x in [True]:#, False]:
-                for contiguous_w in [True]:#, False]:
+            for contiguous_x in [True, False]:
+                for contiguous_wt in [True, False]:
                     out_dtype = next(out_dtypes)
                     
                     x = torch.randn(x_shape, device=device)
+                    if not contiguous_x:
+                        x = x.transpose(0,1)
+                        assert(not x.is_contiguous())
+                    else:
+                        assert(x.is_contiguous())
+
                     x_vals_int8, x_scale, x_zp = dynamically_quantize_per_tensor(x)
 
-                    lin = torch.nn.Linear(in_features = w_shape[1], out_features = w_shape[0], bias=False).to(device)
-                    lin.qconfig = torch.ao.quantization.default_per_channel_qconfig
-                    lin.activation_post_process = lin.qconfig.activation(dtype = torch.quint8, quant_min = 0, quant_max=255)
-                    lin.activation_post_process(lin(x))
-                    qlinear = torch.ao.nn.quantized.modules.Linear.from_float(lin)
+                    lin = torch.nn.Linear(w_shape[1], w_shape[0], False).to(device)
+                    w = lin.weight
+                    w_int8, w_scales, _ = dynamically_quantize_per_channel(w)
+                    w_int8_t = w_int8.transpose(0,1)
+                    if contiguous_wt:
+                        w_int8_t = w_int8_t.contiguous()
+                        assert(w_int8_t.is_contiguous())
+                    else:
+                        assert(not w_int8_t.is_contiguous())
+                    w_int8_t_sums_int64 = w_int8_t.sum(dim=0)
 
-            
-                    w_int8_t, w_scales, _ = dynamically_quantize_per_channel(lin.weight.transpose(0,1))
-                    w_int8_t_sums_int64 = w_int8_t.sum(d=0)
+
+                    
                     y = quant_int8_matmul(x_vals_int8, x_scale, x_zp, w_int8_t, w_int8_t_sums_int64, w_scales, out_dtype)
-                    y_ref = torch.nn.functional.linear(x, w)
+                    y_ref = lin(x)
+                    self.assertGreater(SQNR(y_ref, y), 37)
 
-                    torch.testing.assert_close()
+                    if device == 'cuda':
+                        trit_fn = torch.compile(quant_int8_matmul, mode='max-autotune')
+                        y_triton = trit_fn(x_vals_int8, x_scale, x_zp, w_int8_t, w_int8_t_sums_int64, w_scales, out_dtype)
+                        self.assertGreater(SQNR(y_ref, y_triton), 37)
 
+    def test_quant_int8_matmul_cuda(self):
+        self._test_quant_int8_matmul_impl(device='cuda')
 
+    def test_quant_int8_matmul_cpu(self):
+        self._test_quant_int8_matmul_impl(device='cpu')
+
+class TestQuantInt8DynamicLinearOp(unittest.TestCase):
+    shapes = (
+        # ((x_shape), (w_shape))
+        ((3, 2, 32 , 32),(20, 32)),
+        ((32, 16, 64, 64),(16, 64)),
+        ((100, 100),(2, 100)),
+        ((3, 200, 200),(100, 200)),
+    )
+    def _test_quant_int8_dynamic_linear_impl(self, device):
+        out_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        biases = cycle([True, False])
+        for x_shape, w_shape in self.shapes:
+            use_bias = next(biases)
+            for contiguous_x in [True, False]:
+                for contiguous_wt in [True, False]:
+                    out_dtype = next(out_dtypes)
+                    
+                    x = torch.randn(x_shape, device=device)
+                    if not contiguous_x:
+                        x = x.transpose(0,1)
+                        assert(not x.is_contiguous())
+                    else:
+                        assert(x.is_contiguous())
+                    lin = torch.nn.Linear(w_shape[1], w_shape[0], bias=use_bias).to(device)
+                    bias = lin.bias
+                    w = lin.weight
+                    w_int8, w_scales, _ = dynamically_quantize_per_channel(w)
+                    w_int8_t = w_int8.transpose(0,1)
+                    if contiguous_wt:
+                        w_int8_t = w_int8_t.contiguous()
+                        assert(w_int8_t.is_contiguous())
+                    else:
+                        assert(not w_int8_t.is_contiguous())
+                    w_int8_t_sums_int64 = w_int8_t.sum(dim=0)
+
+                    y = quant_int8_dynamic_linear(x, -128, 127, torch.int8, w_int8_t, w_int8_t_sums_int64, w_scales, bias, out_dtype)
+                    y_ref = lin(x)
+                    self.assertGreater(SQNR(y_ref, y), 37)
+
+                    if device == 'cuda':
+                        trit_fn = torch.compile(quant_int8_dynamic_linear, mode='max-autotune')
+                        y_triton = trit_fn(x, -128, 127, torch.int8, w_int8_t, w_int8_t_sums_int64, w_scales, bias, out_dtype)
+                        self.assertGreater(SQNR(y_ref, y_triton), 37)
+
+    def test_quant_int8_dynamic_linear_cuda(self):
+        self._test_quant_int8_dynamic_linear_impl(device='cuda')
+
+    def test_quant_int8_dynamic_linear_cpu(self):
+        self._test_quant_int8_dynamic_linear_impl(device='cpu')
+
+class TestDynamicallyQuantizedLinear(unittest.TestCase):
+    shapes = (
+        # ((x_shape), (w_shape))
+        ((3, 2, 32 , 32),(20, 32)),
+        ((32, 16, 64, 64),(16, 64)),
+        ((100, 100),(2, 100)),
+        ((3, 200, 200),(100, 200)),
+    )
+    def _test_dynamically_quantized_linear_impl(self, device):
+        out_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        biases = cycle([True, False])
+        for x_shape, w_shape in self.shapes:
+            use_bias = next(biases)
+            for contiguous_x in [True, False]:
+                for contiguous_wt in [True, False]:
+                    out_dtype = next(out_dtypes)
+                    
+                    x = torch.randn(x_shape, device=device)
+                    if not contiguous_x:
+                        x = x.transpose(0,1)
+                        assert(not x.is_contiguous())
+                    else:
+                        assert(x.is_contiguous())
+                    lin = torch.nn.Linear(w_shape[1], w_shape[0], bias=use_bias).to(device)
+                    qlin = DynamicallyQuantizedLinear.from_float(lin, out_dtype=out_dtype)
+
+                    if contiguous_wt:
+                        qlin.w_int8_t = qlin.w_int8_t.contiguous()
+                        assert(qlin.w_int8_t.is_contiguous())
+                    else:
+                        assert(not qlin.w_int8_t.is_contiguous())
+
+                    y = qlin(x)
+                    y_ref = lin(x)
+                    self.assertGreater(SQNR(y_ref, y), 37)
+
+                    if device == 'cuda':
+                        trit_lin = torch.compile(qlin, mode='max-autotune')
+                        print(trit_lin)
+                        y_triton = trit_lin(x)
+                        self.assertGreater(SQNR(y_ref, y_triton), 37)
+                        
+    def test_quant_int8_dynamic_linea_cuda(self):
+        self._test_dynamically_quantized_linear_impl(device='cuda')
+
+    def test_quant_int8_dynamic_linea_cpu(self):
+        self._test_dynamically_quantized_linear_impl(device='cpu')
 
 class TestSafeIntMM(unittest.TestCase):
     """ 
