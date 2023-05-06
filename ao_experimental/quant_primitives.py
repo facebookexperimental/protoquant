@@ -97,7 +97,7 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
     # x_div = x.transpose(axis, -1) * inv_scales
     x_round = torch.round(x_div)
     x_zp = x_round + zero_points
-    x_zp = x_zp.transpose(0, axis)
+    x_zp = x_zp.transpose(axis, -1)
     x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
 
     return x_q, scales, zero_points
