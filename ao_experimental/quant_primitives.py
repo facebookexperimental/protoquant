@@ -47,7 +47,7 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
 
 def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant_max: int=127, target_dtype: torch.dtype = torch.int8, axis: int = 0):
     """
-    This function dynamically quantizes the tensor x but returns the 
+    This function dynamically quantizes the tensor x by channel but returns the 
     int tensor, scale and zero_point separately to more easily enable int8 gpu quantization.
 
     Assumes symmetric quantization
@@ -80,10 +80,9 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
     min_val, max_val = get_min_max_per_channel(x, axis=axis)
 
     # calculate scales and zero point based on min and max
-    # reference: https://fburl.com/code/4wll53rk
+    # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
     max_val_pos = torch.max(max_val, -min_val)
     
-    # reference: https://fburl.com/code/srbiybme
     scales = 2*max_val_pos.to(torch.float64) / torch.tensor([quant_max - quant_min], device=x.device).to(torch.float64)
     # ensure scales is the same dtype as the original tensor
     scales = torch.clamp(scales, min=eps)
