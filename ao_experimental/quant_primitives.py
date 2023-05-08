@@ -25,9 +25,8 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
     eps = torch.finfo(torch.float32).eps
 
     # get min and max
-    min_val, max_val = torch.aminmax(x)
-    # min_val = torch.min(x)
-    # max_val = torch.max(x)
+    min_val = torch.min(x)
+    max_val = torch.max(x)
 
     min_val_neg = torch.min(min_val, torch.zeros_like(min_val))
     max_val_pos = torch.max(max_val, torch.zeros_like(max_val))
@@ -76,7 +75,9 @@ def dynamically_quantize_per_channel(x: torch.Tensor, quant_min: int=-128, quant
         new_axis_list[0] = axis
         x2 = x.permute(new_axis_list)
         x2 = torch.flatten(x2, start_dim = 1)
-        return torch.aminmax(x2, dim = 1)
+        mins = x2.min(dim=1).values
+        maxs = x2.max(dim=1).values
+        return mins, maxs
 
     min_val, max_val = get_min_max_per_channel(x, axis=axis)
 

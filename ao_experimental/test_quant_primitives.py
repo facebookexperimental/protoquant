@@ -44,7 +44,6 @@ class EndToEndTest(unittest.TestCase):
         model = TestModel().to(device).eval() # model needs to be big enough that triton doesn't error
         q_model = copy.deepcopy(model)
 
-        print(model)
         def convert_modules(model, targets, convert_function):
             for name, module in model.named_children():
                 if type(module) in targets:
@@ -54,18 +53,18 @@ class EndToEndTest(unittest.TestCase):
                     convert_modules(module, targets, convert_function)
 
         convert_modules(q_model, [torch.nn.Linear], DynamicallyQuantizedLinear.from_float)
-        print(q_model)
         if device == 'cuda':
-            trit_model = copy.deepcopy(model)
-            convert_modules(trit_model, [torch.nn.Linear], DynamicallyQuantizedLinear.from_float)
-            convert_modules(trit_model, [DynamicallyQuantizedLinear], lambda mod: torch.compile(mod, mode='max-autotune'))
-            print(trit_model)
+            # trit_model = copy.deepcopy(model)
+            # convert_modules(trit_model, [torch.nn.Linear], DynamicallyQuantizedLinear.from_float)
+            # convert_modules(trit_model, [DynamicallyQuantizedLinear], lambda mod: torch.compile(mod, mode='max-autotune'))
+            trit_model = torch.compile(q_model, mode='max-autotune')
         for i in range(5):
             x = model.get_example_input().to(device)
             y_ref = model(x)
             y = q_model(x)
             self.assertGreater(SQNR(y_ref, y), 35)
             if device == 'cuda':
+                trit_model.eval()
                 y_trit = trit_model(x)
                 self.assertGreater(SQNR(y_ref, y_trit), 35)
 
@@ -447,7 +446,6 @@ class TestDynamicallyQuantizedLinear(unittest.TestCase):
 
                     if device == 'cuda':
                         trit_lin = torch.compile(qlin, mode='max-autotune')
-                        print(trit_lin)
                         y_triton = trit_lin(x)
                         self.assertGreater(SQNR(y_ref, y_triton), 37)
                         
