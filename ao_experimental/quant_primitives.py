@@ -24,9 +24,9 @@ def dynamically_quantize_per_tensor(x: torch.Tensor, quant_min: int = -128, quan
     eps = torch.finfo(torch.float32).eps
 
     # get min and max
-    min_val, max_val = torch.aminmax(x)
-    # min_val = torch.min(x)
-    # max_val = torch.max(x)
+    # min_val, max_val = torch.aminmax(x) # compiled triton code is the same for min/max and aminmax
+    min_val = torch.min(x)
+    max_val = torch.max(x)
 
     min_val_neg = torch.min(min_val, torch.zeros_like(min_val))
     max_val_pos = torch.max(max_val, torch.zeros_like(max_val))
