@@ -181,7 +181,7 @@ def dequantize_per_channel(
 class DynamicallyQuantizedLinear(torch.nn.Module):
     r"""
     This function is similar to cpu-only torch.ao.nn.quantized.dynamic.modules.linear.Linear
-    but more basic and in a way that can be triton traced to run gpu cuda.
+    but is implemented in a way that can be triton traced to run gpu cuda.
 
     note: in order for this to be triton compilable and runnable the in_channels, aka w_int8_t.shape[0]
     must be greater than 16
