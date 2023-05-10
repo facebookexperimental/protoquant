@@ -5,6 +5,8 @@ from quant_primitives import (
     safe_int_mm,
     dynamically_quantize_per_tensor,
     dynamically_quantize_per_channel,
+    dequantize_per_tensor,
+    dequantize_per_channel,
 )
 from itertools import cycle as cycle
 
