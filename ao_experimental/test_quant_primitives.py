@@ -1,6 +1,5 @@
-import torch
-
 import unittest
+import torch
 from quant_primitives import (
     safe_int_mm,
     dynamically_quantize_per_tensor,
