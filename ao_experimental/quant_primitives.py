@@ -39,6 +39,9 @@ def dynamically_quantize_per_tensor(
 
     # calculate scale and zero point based on min and max
     # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
+    # we choose to match the scale and zero_point dtypes of the above reference function, i.e.
+    # fp64 scale and int64 zero_point for ease of debugging, this may change subject to analysis
+    # of performance
     scale = (max_val_pos.to(torch.float64) - min_val_neg) / torch.tensor(
         [quant_max - quant_min], dtype=torch.float64
     ).to(x.device)
