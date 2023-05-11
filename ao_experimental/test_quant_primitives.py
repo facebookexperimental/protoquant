@@ -9,14 +9,9 @@ from quant_primitives import (
     dequantize_per_channel,
     quant_int8_matmul,
     quant_int8_dynamic_linear,
-    DynamicallyQuantizedLinear,
 )
+from quantized_modules import DynamicallyQuantizedLinear
 from itertools import cycle as cycle
-from torch.testing._internal.common_quantization import (
-    LinearModelWithSubmodule,
-    LinearReluLinearModel,
-    LinearAddModel,
-)
 import copy
 
 torch.manual_seed(0)
