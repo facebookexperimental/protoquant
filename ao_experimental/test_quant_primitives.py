@@ -1,6 +1,5 @@
-import torch
-
 import unittest
+import torch
 from quant_primitives import safe_int_mm, dynamically_quantize_per_tensor
 from itertools import cycle as cycle
 
@@ -88,6 +87,7 @@ class TestPerTensorQuantization(unittest.TestCase):
         self._test_dynamically_quantize_per_tensor_impl(
             device="cpu", quant_min=0, quant_max=255, target_dtype=torch.uint8, tol=1
         )
+>>>>>>> f266574... adding dynamically_quantize_per_tensor
 
 
 class TestSafeIntMM(unittest.TestCase):
