@@ -1,11 +1,12 @@
 import unittest
+from itertools import cycle as cycle
+
 import torch
 from quant_primitives import (
-    safe_int_mm,
-    dynamically_quantize_per_tensor,
     dynamically_quantize_per_channel,
+    dynamically_quantize_per_tensor,
+    safe_int_mm,
 )
-from itertools import cycle as cycle
 
 torch.manual_seed(0)
 
