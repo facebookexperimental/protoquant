@@ -90,18 +90,9 @@ def dynamically_quantize_per_channel(
     # default setup for affine quantization of activations
     eps = torch.finfo(torch.float32).eps
 
-    # get min and max
-    def get_min_max_per_channel(x: torch.Tensor, axis: int):
-        new_axis_list = [i for i in range(len(x.shape))]
-        new_axis_list[axis] = 0
-        new_axis_list[0] = axis
-        x2 = x.permute(new_axis_list)
-        x2 = torch.flatten(x2, start_dim=1)
-        mins = x2.min(dim=1).values
-        maxs = x2.max(dim=1).values
-        return mins, maxs
-
-    min_val, max_val = get_min_max_per_channel(x, axis=axis)
+    dimensions_to_reduce = [i for i in range(len(x.shape))].pop(axis)
+    min_val = torch.amin(x, dim = dimensions_to_reduce)
+    max_val = torch.amax(x, dim = dimensions_to_reduce)
 
     # calculate scales and zero point based on min and max
     # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
