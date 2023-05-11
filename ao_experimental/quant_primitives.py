@@ -40,6 +40,9 @@ def dynamically_quantize_per_tensor(
 
     # calculate scale and zero point based on min and max
     # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
+    # we choose to match the scale and zero_point dtypes of the above reference function, i.e.
+    # fp64 scale and int64 zero_point for ease of debugging, this may change subject to analysis
+    # of performance
     scale = (max_val_pos.to(torch.float64) - min_val_neg) / torch.tensor(
         [quant_max - quant_min], dtype=torch.float64
     ).to(x.device)
@@ -101,6 +104,9 @@ def dynamically_quantize_per_channel(
 
     # calculate scales and zero point based on min and max
     # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
+    # here we choose the scale and zero_point dtypes to be float64 and int32 to match the reference
+    # implementation in the link above since there is no per channel dynamically quantized function as of now.
+    # This choice of precision may change subect to performance consideration in the future.
     max_val_pos = torch.max(max_val, -min_val)
 
     scales = (
@@ -116,9 +122,10 @@ def dynamically_quantize_per_channel(
     )
 
     # quantize based on qmin/qmax/scales/zp
-    # reference: https://www.internalfb.com/code/fbsource/[8edc275012b1]/fbcode/caffe2/torch/ao/quantization/fx/_decomposed.py?lines=63
+    # reference: https://github.com/pytorch/pytorch/blob/bb7d9886fbd7d058146c76aa428e227d15f67e53/torch/ao/quantization/fx/_decomposed.py#L325
     x_div = x.transpose(axis, -1) / scales
-    # note: quantize_per_channel uses inv_scale method of calculation with a float32 but thats slightly less accurate
+    # note: certain implementations of quantize_per_channel uses inv_scale method of calculation with a float32 
+    # which is slightly less accurate
     # inv_scales = 1/scales
     # x_div = x.transpose(axis, -1) * inv_scales
     x_round = torch.round(x_div)
