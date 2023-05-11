@@ -158,7 +158,9 @@ def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:
         return torch._int_mm(input, mat2)
 
     # error checking for cublas path
-    assert mat2.device == input.device, f"need both tensors to be on the same device but got {mat2.device} and {input.device}"
+    assert (
+        mat2.device == input.device
+    ), f"need both tensors to be on the same device but got {mat2.device} and {input.device}"
     device_cpu = "cpu" in [mat2.device.type, input.device.type]
     # with input.shape = [i,j] and mat2.shape = [j,k]
     i_is_strictly_greater_than_16 = input.shape[0] > 16
