@@ -1,19 +1,21 @@
+import copy
+import unittest
+from itertools import cycle as cycle
+
 import torch
 import torch.nn as nn
-import unittest
-import torch
 from quant_primitives import (
-    safe_int_mm,
-    dynamically_quantize_per_tensor,
-    dynamically_quantize_per_channel,
-    dequantize_per_tensor,
     dequantize_per_channel,
-    quant_int8_matmul,
+    dequantize_per_channel,
+    dequantize_per_tensor,
+    dequantize_per_tensor,
+    dynamically_quantize_per_channel,
+    dynamically_quantize_per_tensor,
     quant_int8_dynamic_linear,
+    quant_int8_matmul,
+    safe_int_mm,
 )
 from quantized_modules import DynamicallyQuantizedLinear
-from itertools import cycle as cycle
-import copy
 
 torch.manual_seed(0)
 

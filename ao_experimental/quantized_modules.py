@@ -1,5 +1,6 @@
 import torch
-from quant_primitives import quant_int8_dynamic_linear, dynamically_quantize_per_channel
+from quant_primitives import dynamically_quantize_per_channel, quant_int8_dynamic_linear
+
 
 class DynamicallyQuantizedLinear(torch.nn.Module):
     r"""
