@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import unittest
+import torch
 from quant_primitives import (
     safe_int_mm,
     dynamically_quantize_per_tensor,
