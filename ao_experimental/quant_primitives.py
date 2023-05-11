@@ -1,6 +1,7 @@
+from typing import Union
+
 import torch
 from torch._dynamo import is_compiling as dynamo_is_compiling
-from typing import Union
 
 
 # copy-pasta of https://www.internalfb.com/intern/anp/view/?id=3350736
@@ -124,7 +125,7 @@ def dynamically_quantize_per_channel(
     # quantize based on qmin/qmax/scales/zp
     # reference: https://github.com/pytorch/pytorch/blob/bb7d9886fbd7d058146c76aa428e227d15f67e53/torch/ao/quantization/fx/_decomposed.py#L325
     x_div = x.transpose(axis, -1) / scales
-    # note: certain implementations of quantize_per_channel uses inv_scale method of calculation with a float32 
+    # note: certain implementations of quantize_per_channel uses inv_scale method of calculation with a float32
     # which is slightly less accurate
     # inv_scales = 1/scales
     # x_div = x.transpose(axis, -1) * inv_scales
