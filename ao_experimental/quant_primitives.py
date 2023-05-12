@@ -90,10 +90,10 @@ def dynamically_quantize_per_channel(
     # default setup for affine quantization of activations
     eps = torch.finfo(torch.float32).eps
 
-    dimensions_to_reduce = [i for i in range(len(x.shape))].pop(axis)
+    dimensions_to_reduce = [i for i in range(len(x.shape))]
+    dimensions_to_reduce.remove(axis)
     min_val = torch.amin(x, dim = dimensions_to_reduce)
     max_val = torch.amax(x, dim = dimensions_to_reduce)
-
     # calculate scales and zero point based on min and max
     # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
     # here we choose the scale and zero_point dtypes to be float64 and int32 to match the reference
