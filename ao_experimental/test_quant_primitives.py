@@ -6,8 +6,6 @@ import torch
 import torch.nn as nn
 from quant_primitives import (
     dequantize_per_channel,
-    dequantize_per_channel,
-    dequantize_per_tensor,
     dequantize_per_tensor,
     dynamically_quantize_per_channel,
     dynamically_quantize_per_tensor,
@@ -211,7 +209,6 @@ class TestDequantizePerTensor(unittest.TestCase):
                     trit_dequantize_per_tensor = torch.compile(
                         dequantize_per_tensor, mode="max-autotune"
                     )
-                    # x_dq = dequantize_per_tensor(ref_int, ref_q.q_scale(), ref_q.q_zero_point(), out_dtype) # scalar args, not working
                     trit_dq = trit_dequantize_per_tensor(
                         ref_int, scale, zero_point, out_dtype
                     )  # tensor args
