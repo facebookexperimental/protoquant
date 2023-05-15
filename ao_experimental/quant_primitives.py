@@ -40,7 +40,8 @@ def dynamically_quantize_per_tensor(
     max_val_pos = torch.max(max_val, torch.zeros_like(max_val))
 
     # calculate scale and zero point based on min and max
-    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
     # we choose to match the scale and zero_point dtypes of the above reference function, i.e.
     # fp64 scale and int64 zero_point for ease of debugging, this may change subject to analysis
     # of performance
@@ -53,7 +54,8 @@ def dynamically_quantize_per_tensor(
     zero_point = torch.clamp(zero_point, quant_min, quant_max)
 
     # quantize based on qmin/qmax/scale/zp
-    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
     x_q = torch.clamp(torch.round(x / scale) + zero_point, quant_min, quant_max).to(
         target_dtype
     )
@@ -90,12 +92,13 @@ def dynamically_quantize_per_channel(
     # default setup for affine quantization of activations
     eps = torch.finfo(torch.float32).eps
 
-    dimensions_to_reduce = [i for i in range(len(x.shape))]
+    dimensions_to_reduce = list(range(len(x.shape)))
     dimensions_to_reduce.remove(axis)
-    min_val = torch.amin(x, dim = dimensions_to_reduce)
-    max_val = torch.amax(x, dim = dimensions_to_reduce)
+    min_val = torch.amin(x, dim=dimensions_to_reduce)
+    max_val = torch.amax(x, dim=dimensions_to_reduce)
     # calculate scales and zero point based on min and max
-    # reference: https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
     # here we choose the scale and zero_point dtypes to be float64 and int32 to match the reference
     # implementation in the link above since there is no per channel dynamically quantized function as of now.
     # This choice of precision may change subect to performance consideration in the future.
@@ -114,7 +117,8 @@ def dynamically_quantize_per_channel(
     )
 
     # quantize based on qmin/qmax/scales/zp
-    # reference: https://github.com/pytorch/pytorch/blob/bb7d9886fbd7d058146c76aa428e227d15f67e53/torch/ao/quantization/fx/_decomposed.py#L325
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/bb7d9886fbd7d058146c76aa428e227d15f67e53/torch/ao/quantization/fx/_decomposed.py#L325
     x_div = x.transpose(axis, -1) / scales
     # note: certain implementations of quantize_per_channel uses inv_scale method of calculation with a float32
     # which is slightly less accurate

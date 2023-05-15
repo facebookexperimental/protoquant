@@ -132,7 +132,6 @@ class TestDequantizePerTensor(unittest.TestCase):
                     trit_dequantize_per_tensor = torch.compile(
                         dequantize_per_tensor, mode="max-autotune"
                     )
-                    # x_dq = dequantize_per_tensor(ref_int, ref_q.q_scale(), ref_q.q_zero_point(), out_dtype) # scalar args, not working
                     trit_dq = trit_dequantize_per_tensor(
                         ref_int, scale, zero_point, out_dtype
                     )  # tensor args
