@@ -1,7 +1,93 @@
 import unittest
+from itertools import cycle as cycle
 
 import torch
-from quant_primitives import safe_int_mm
+from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm
+
+torch.manual_seed(0)
+
+
+class TestPerTensorQuantization(unittest.TestCase):
+    r"""
+    Tests the dynamically_quantize_per_tensor function across a variety of input cases and ensures numerics match ao version
+    """
+    shapes = (
+        (1, 1, 32, 32),
+        (32, 16, 64, 64),
+        (100, 100),
+        (1, 200, 200),
+    )
+
+    def _test_dynamically_quantize_per_tensor_impl(
+        self, device, quant_min=-128, quant_max=127, target_dtype=torch.int8, tol=0
+    ):
+        f_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        for x_shape in self.shapes:
+            for transp in [False, True]:
+                f_dtype = next(f_dtypes)
+                x = torch.randn(x_shape, device=device, dtype=f_dtype) * 1000
+                if transp:
+                    x = x.transpose(0, -1)
+
+                x_int8, scale, zero_point = dynamically_quantize_per_tensor(
+                    x, quant_min, quant_max, target_dtype
+                )
+
+                q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+                x_q = torch.quantize_per_tensor_dynamic(
+                    x.to(torch.float32), dtype=q_dtype, reduce_range=False
+                )
+
+                torch.testing.assert_close(scale, x_q.q_scale())
+                torch.testing.assert_close(
+                    zero_point, x_q.q_zero_point(), atol=0, rtol=0
+                )
+                torch.testing.assert_close(
+                    x_int8.to(torch.int32),
+                    x_q.int_repr().to(torch.int32),
+                    atol=tol,
+                    rtol=100,
+                )
+
+                if device == "cuda":
+                    trit_dynamic_quant = torch.compile(
+                        dynamically_quantize_per_tensor, mode="max-autotune"
+                    )
+                    trit_x_int8, trit_scale, trit_zp = trit_dynamic_quant(
+                        x, quant_min, quant_max, target_dtype
+                    )
+                    torch.testing.assert_close(trit_scale, x_q.q_scale())
+                    torch.testing.assert_close(
+                        trit_zp, x_q.q_zero_point(), atol=0, rtol=0
+                    )
+                    torch.testing.assert_close(
+                        trit_x_int8.to(torch.int32),
+                        x_q.int_repr().to(torch.int32),
+                        atol=tol,
+                        rtol=100,
+                    )
+
+    def test_dynamically_quantize_per_tensor_cuda_int8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+            device="cuda", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dynamically_quantize_per_tensor_cuda_uint8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+            device="cuda", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
+
+    # CPU quantization has slightly different numerics than cuda, we chose to match cuda and
+    # have all int values be within 1 of cpu
+    def test_dynamically_quantize_per_tensor_cpu_int8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+            device="cpu", quant_min=-128, quant_max=127, target_dtype=torch.int8, tol=1
+        )
+
+    def test_dynamically_quantize_per_tensor_cpu_uint8(self):
+        self._test_dynamically_quantize_per_tensor_impl(
+            device="cpu", quant_min=0, quant_max=255, target_dtype=torch.uint8, tol=1
+        )
 
 
 class TestSafeIntMM(unittest.TestCase):

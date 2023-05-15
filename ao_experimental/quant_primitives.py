@@ -2,6 +2,63 @@ import torch
 from torch._dynamo import is_compiling as dynamo_is_compiling
 
 
+# copy-pasta of https://www.internalfb.com/intern/anp/view/?id=3350736
+def dynamically_quantize_per_tensor(
+    x: torch.Tensor,
+    quant_min: int = -128,
+    quant_max: int = 127,
+    target_dtype: torch.dtype = torch.int8,
+):
+    r"""
+    This function dynamically quantizes the tensor x similar to torch.quantize_per_tensor_dynamic but returns the
+    int tensor, scale and zero_point separately to more easily enable int8 gpu quantization.
+
+    Assumes affine quantization
+
+    Args:
+        x (Tensor, float): the tensor being quantized
+        quant_min (int): minimum integer value desired for quantized output
+        quant_max (int): maximum integer value desired for quantized output
+        target_dtype (dtype): desired dtype for output tensor
+
+    Return:
+        x_q (Tensor, int): the resulting integer tensor with dtype of target_dtype
+        scale (float64): the dynamically calculated scale
+        zero_point (int32): the dynamically calculated zero_point
+    """
+    # default setup for affine quantization of activations
+    eps = torch.finfo(torch.float32).eps
+
+    # get min and max
+    # min_val, max_val = torch.aminmax(x) # compiled triton code is the same for min/max and aminmax
+    min_val = torch.min(x)
+    max_val = torch.max(x)
+
+    min_val_neg = torch.min(min_val, torch.zeros_like(min_val))
+    max_val_pos = torch.max(max_val, torch.zeros_like(max_val))
+
+    # calculate scale and zero point based on min and max
+    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
+    # we choose to match the scale and zero_point dtypes of the above reference function, i.e.
+    # fp64 scale and int64 zero_point for ease of debugging, this may change subject to analysis
+    # of performance
+    scale = (max_val_pos.to(torch.float64) - min_val_neg) / torch.tensor(
+        [quant_max - quant_min], dtype=torch.float64
+    ).to(x.device)
+    scale = torch.clamp(scale, min=eps)
+
+    zero_point = quant_min - torch.round(min_val_neg / scale).to(torch.int32)
+    zero_point = torch.clamp(zero_point, quant_min, quant_max)
+
+    # quantize based on qmin/qmax/scale/zp
+    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
+    x_q = torch.clamp(torch.round(x / scale) + zero_point, quant_min, quant_max).to(
+        target_dtype
+    )
+
+    return x_q, scale.item(), zero_point.item()
+
+
 def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:
     r"""
     This function wraps torch._int_mm and avoids several undesirable behaviors of the function for certain inputs while still
