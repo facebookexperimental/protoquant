@@ -38,7 +38,8 @@ def dynamically_quantize_per_tensor(
     max_val_pos = torch.max(max_val, torch.zeros_like(max_val))
 
     # calculate scale and zero point based on min and max
-    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cpu/QuantUtils.h#L107
     # we choose to match the scale and zero_point dtypes of the above reference function, i.e.
     # fp64 scale and int64 zero_point for ease of debugging, this may change subject to analysis
     # of performance
@@ -51,12 +52,82 @@ def dynamically_quantize_per_tensor(
     zero_point = torch.clamp(zero_point, quant_min, quant_max)
 
     # quantize based on qmin/qmax/scale/zp
-    # reference: https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/e779a30d5097714acea011da6a554e43810b5d0e/aten/src/ATen/native/quantized/cuda/AffineQuantizer.cu#L60
     x_q = torch.clamp(torch.round(x / scale) + zero_point, quant_min, quant_max).to(
         target_dtype
     )
 
     return x_q, scale.item(), zero_point.item()
+
+
+def dynamically_quantize_per_channel(
+    x: torch.Tensor,
+    quant_min: int = -128,
+    quant_max: int = 127,
+    target_dtype: torch.dtype = torch.int8,
+    axis: int = 0,
+):
+    r"""
+    This function dynamically quantizes the tensor x by channel but returns the
+    int tensor, scale and zero_point separately to more easily enable int8 gpu quantization.
+
+    Assumes symmetric quantization
+
+    Args:
+        x (Tensor, float): the tensor being quantized
+        quant_min (int): minimum integer value desired for quantized output
+        quant_max (int): maximum integer value desired for quantized output
+        target_dtype (dtype): desired dtype for output tensor
+        axis (int): the channel axis
+
+    Return:
+        x_q (Tensor, int): the resulting integer tensor with dtype of target_dtype
+        scale (Tensor, float64): the dynamically calculated scale (float64)
+        zero_point (Tensor, int64): the dynamically calculated zero_point (int64)
+    """
+
+    # default setup for affine quantization of activations
+    eps = torch.finfo(torch.float32).eps
+
+    dimensions_to_reduce = list(range(len(x.shape)))
+    dimensions_to_reduce.remove(axis)
+    min_val = torch.amin(x, dim=dimensions_to_reduce)
+    max_val = torch.amax(x, dim=dimensions_to_reduce)
+    # calculate scales and zero point based on min and max
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/a3989b2802a5b32d8793557ddb5aba36298ef2be/torch/ao/quantization/observer.py#L330
+    # here we choose the scale and zero_point dtypes to be float64 and int32 to match the reference
+    # implementation in the link above since there is no per channel dynamically quantized function as of now.
+    # This choice of precision may change subect to performance consideration in the future.
+    max_val_pos = torch.max(max_val, -min_val)
+
+    scales = (
+        2
+        * max_val_pos.to(torch.float64)
+        / torch.tensor([quant_max - quant_min], device=x.device).to(torch.float64)
+    )
+    scales = torch.clamp(scales, min=eps)
+    zero_points = (
+        torch.zeros(max_val_pos.size(), dtype=torch.int64, device=x.device)
+        + 128
+        + quant_min
+    )
+
+    # quantize based on qmin/qmax/scales/zp
+    # reference:
+    # https://github.com/pytorch/pytorch/blob/bb7d9886fbd7d058146c76aa428e227d15f67e53/torch/ao/quantization/fx/_decomposed.py#L325
+    x_div = x.transpose(axis, -1) / scales
+    # note: certain implementations of quantize_per_channel uses inv_scale method of calculation with a float32
+    # which is slightly less accurate
+    # inv_scales = 1/scales
+    # x_div = x.transpose(axis, -1) * inv_scales
+    x_round = torch.round(x_div)
+    x_zp = x_round + zero_points
+    x_zp = x_zp.transpose(axis, -1)
+    x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
+
+    return x_q, scales, zero_points
 
 
 def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:

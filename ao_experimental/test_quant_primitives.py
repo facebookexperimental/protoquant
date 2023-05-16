@@ -2,9 +2,104 @@ import unittest
 from itertools import cycle as cycle
 
 import torch
-from quant_primitives import dynamically_quantize_per_tensor, safe_int_mm
+from quant_primitives import (
+    dynamically_quantize_per_channel,
+    dynamically_quantize_per_tensor,
+    safe_int_mm,
+)
 
 torch.manual_seed(0)
+
+
+class TestPerChannelQuantization(unittest.TestCase):
+    r"""
+    Tests the dynamically_quantize_per_channel function across a variety of input cases and ensures numerics match ao version
+    """
+    shapes = (
+        (1, 200, 200),
+        (5, 5),
+        (2, 8, 32, 32),
+        (32, 16, 64, 64),
+    )
+
+    def _test_dynamically_quantize_per_channel_impl(
+        self, device, quant_min=-128, quant_max=127, target_dtype=torch.int8
+    ):
+        f_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        transposes = cycle([True, False])
+        for x_shape in self.shapes:
+            for axis in range(len(x_shape)):
+                transp = next(transposes)
+                f_dtype = next(f_dtypes)
+                x = torch.randn(x_shape, device=device, dtype=f_dtype) * 1000
+                if transp:
+                    x = x.transpose(0, -1)
+
+                x_int8, scales, zero_points = dynamically_quantize_per_channel(
+                    x, quant_min, quant_max, target_dtype, axis=axis
+                )
+
+                q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+
+                obs = torch.ao.quantization.PerChannelMinMaxObserver(
+                    ch_axis=axis,
+                    dtype=q_dtype,
+                    qscheme=torch.per_channel_symmetric,
+                    reduce_range=False,
+                )
+                obs(x)
+                ref_scales, ref_zero_points = obs.calculate_qparams()
+                ref_scales, ref_zero_points = ref_scales.to(
+                    x.device
+                ), ref_zero_points.to(x.device)
+                torch.testing.assert_close(scales.to(torch.float32), ref_scales)
+                torch.testing.assert_close(zero_points, ref_zero_points, atol=0, rtol=0)
+
+                x_q_int_repr = torch.quantize_per_channel(
+                    x.to(torch.float32),
+                    ref_scales,
+                    ref_zero_points,
+                    axis=axis,
+                    dtype=q_dtype,
+                ).int_repr()
+                torch.testing.assert_close(x_int8, x_q_int_repr, atol=1, rtol=100)
+
+                if device == "cuda":
+                    trit_dynamic_quant = torch.compile(
+                        dynamically_quantize_per_channel, mode="max-autotune"
+                    )
+                    trit_x_int8, trit_scales, trit_zps = trit_dynamic_quant(
+                        x, quant_min, quant_max, target_dtype, axis=axis
+                    )
+                    torch.testing.assert_close(
+                        trit_scales.to(torch.float32), ref_scales
+                    )
+                    torch.testing.assert_close(
+                        trit_zps, ref_zero_points, atol=0, rtol=0
+                    )
+                    torch.testing.assert_close(
+                        trit_x_int8, x_q_int_repr, atol=1, rtol=100
+                    )
+
+    def test_dynamically_quantize_per_channel_cuda_int8(self):
+        self._test_dynamically_quantize_per_channel_impl(
+            device="cuda", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dynamically_quantize_per_channel_cuda_uint8(self):
+        self._test_dynamically_quantize_per_channel_impl(
+            device="cuda", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
+
+    def test_dynamically_quantize_per_channel_cpu_int8(self):
+        self._test_dynamically_quantize_per_channel_impl(
+            device="cpu", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dynamically_quantize_per_channel_cpu_uint8(self):
+        self._test_dynamically_quantize_per_channel_impl(
+            device="cpu", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
 
 
 class TestPerTensorQuantization(unittest.TestCase):
