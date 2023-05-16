@@ -290,7 +290,7 @@ def quant_int8_matmul(
     # TBD if that is actually faster on GPUs
     # need to use 32 bits here to prevent overflow for large shapes,
     # 16 bits is not enough
-    # XW_float32 = XW_int32.to(torch.float32)
+    XW_float32 = XW_int32.to(torch.float32)
 
     #
     # 2. connect it all together
