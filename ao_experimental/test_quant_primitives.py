@@ -3,12 +3,160 @@ from itertools import cycle as cycle
 
 import torch
 from quant_primitives import (
+    dequantize_per_channel,
+    dequantize_per_tensor,
     dynamically_quantize_per_channel,
     dynamically_quantize_per_tensor,
     safe_int_mm,
 )
 
 torch.manual_seed(0)
+
+
+class TestDequantizePerChannel(unittest.TestCase):
+    """
+    Tests the dequantize_per_tensor function across a variety of input cases and ensures numerics match ao version
+    """
+
+    shapes = (
+        (5, 5),
+        (2, 8, 32, 32),
+        (32, 16, 64, 64),
+        (1, 200, 200),
+    )
+
+    def _test_dequantize_per_channel_impl(
+        self, device, quant_min=-128, quant_max=127, target_dtype=torch.int8
+    ):
+        out_dtypes = cycle([torch.float16, torch.float32, torch.float64])
+        for x_shape in self.shapes:
+            for axis in range(len(x_shape)):
+                out_dtype = next(out_dtypes)
+                x = torch.randn(x_shape, device=device) * 1000
+
+                _, scales, zero_points = dynamically_quantize_per_channel(
+                    x, quant_min, quant_max, target_dtype, axis
+                )
+
+                q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+                ref_q = torch.quantize_per_channel(
+                    x, scales, zero_points, axis, q_dtype
+                )
+                ref_int = ref_q.int_repr()
+
+                self.assertEqual(ref_int.dtype, target_dtype)
+
+                x_dq = dequantize_per_channel(
+                    ref_int, scales, zero_points, out_dtype, axis
+                )
+                ref_dq = ref_q.dequantize().to(out_dtype)
+                self.assertEqual(x_dq.dtype, out_dtype)
+                torch.testing.assert_close(x_dq, ref_dq)
+
+                if device == "cuda":
+                    trit_dequantize_per_channel = torch.compile(
+                        dequantize_per_channel, mode="max-autotune"
+                    )
+                    trit_dq = trit_dequantize_per_channel(
+                        ref_int, scales, zero_points, out_dtype, axis
+                    )
+                    self.assertEqual(trit_dq.dtype, out_dtype)
+                    torch.testing.assert_close(trit_dq, ref_dq)
+
+    def test_dequantize_per_channel_cuda_int8(self):
+        self._test_dequantize_per_channel_impl(
+            device="cuda", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dequantize_per_channel_cuda_uint8(self):
+        self._test_dequantize_per_channel_impl(
+            device="cuda", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
+
+    def test_dequantize_per_channel_cpu_int8(self):
+        self._test_dequantize_per_channel_impl(
+            device="cpu", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dequantize_per_channel_cpu_uint8(self):
+        self._test_dequantize_per_channel_impl(
+            device="cpu", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
+
+
+class TestDequantizePerTensor(unittest.TestCase):
+    """
+    Tests the dequantize_per_tensor function across a variety of input cases and ensures numerics match ao version
+    """
+
+    shapes = (
+        (5, 5),
+        (2, 8, 32, 32),
+        (32, 16, 64, 64),
+        (1, 200, 200),
+    )
+
+    def _test_dequantize_per_tensor_impl(
+        self, device, quant_min=-128, quant_max=127, target_dtype=torch.int8
+    ):
+        out_dtypes = [torch.float16, torch.float32, torch.float64]
+        for x_shape in self.shapes:
+            for out_dtype in out_dtypes:
+                x = torch.randn(x_shape, device=device) * 1000
+
+                _, scale, zero_point = dynamically_quantize_per_tensor(
+                    x, quant_min, quant_max, target_dtype
+                )
+
+                q_dtype = torch.quint8 if target_dtype == torch.uint8 else torch.qint8
+                ref_q = torch.quantize_per_tensor_dynamic(
+                    x, q_dtype, reduce_range=False
+                )
+                ref_int = ref_q.int_repr()
+
+                self.assertEqual(ref_int.dtype, target_dtype)
+
+                x_dq = dequantize_per_tensor(
+                    ref_int, ref_q.q_scale(), ref_q.q_zero_point(), out_dtype
+                )  # scalar args
+                x_dq2 = dequantize_per_tensor(
+                    ref_int, scale, zero_point, out_dtype
+                )  # tensor args
+                ref_dq = ref_q.dequantize().to(out_dtype)
+                self.assertEqual(x_dq.dtype, out_dtype)
+                self.assertEqual(x_dq2.dtype, out_dtype)
+                torch.testing.assert_close(x_dq, ref_dq)
+                torch.testing.assert_close(x_dq2, ref_dq)
+
+                if device == "cuda":
+                    trit_dequantize_per_tensor = torch.compile(
+                        dequantize_per_tensor, mode="max-autotune"
+                    )
+                    trit_dq = trit_dequantize_per_tensor(
+                        ref_int, scale, zero_point, out_dtype
+                    )  # tensor args
+                    self.assertEqual(trit_dq.dtype, out_dtype)
+                    torch.testing.assert_close(trit_dq, ref_dq)
+
+    def test_dequantize_per_tensor_cuda_int8(self):
+        self._test_dequantize_per_tensor_impl(
+            device="cuda", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dequantize_per_tensor_cuda_uint8(self):
+        self._test_dequantize_per_tensor_impl(
+            device="cuda", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
+
+    def test_dequantize_per_tensor_cpu_int8(self):
+        self._test_dequantize_per_tensor_impl(
+            device="cpu", quant_min=-128, quant_max=127, target_dtype=torch.int8
+        )
+
+    def test_dequantize_per_tensor_cpu_uint8(self):
+        self._test_dequantize_per_tensor_impl(
+            device="cpu", quant_min=0, quant_max=255, target_dtype=torch.uint8
+        )
 
 
 class TestPerChannelQuantization(unittest.TestCase):

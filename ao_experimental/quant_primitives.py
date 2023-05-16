@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 from torch._dynamo import is_compiling as dynamo_is_compiling
 
@@ -128,6 +130,55 @@ def dynamically_quantize_per_channel(
     x_q = torch.clamp(x_zp, quant_min, quant_max).to(target_dtype)
 
     return x_q, scales, zero_points
+
+
+# reference: https://fburl.com/code/vfsygwd0
+def dequantize_per_tensor(
+    int_repr: torch.IntTensor,
+    scale: Union[torch.Tensor, float],
+    zero_point: Union[torch.Tensor, int],
+    out_dtype=torch.float32,
+):
+    """This function works alongside dynamically_quantize_per_tensor to obtain a floating point tensor from a quantized tensor
+
+    Args:
+        int_repr (Tensor, int): the integer representation of the quantized tensor being dequantized
+        scale (Union[torch.Tensor, float64]): scale value for quantized tensor (can be a tensor or scalar)
+        zero_point (Union[torch.Tensor, int32]): zero point for quantized tensor (can be a tensor or scalar)
+        out_dtype (dtype): desired dtype for output tensor
+
+    Return:
+        x (Tensor, float): the resulting float tensor with dtype of out_dtype
+    """
+    return (int_repr.to(out_dtype) - zero_point) * scale
+
+
+# reference: https://fburl.com/code/org0fmi3
+def dequantize_per_channel(
+    int_repr: torch.Tensor,
+    scales: torch.Tensor,
+    zero_points: torch.Tensor,
+    out_dtype=torch.float32,
+    axis: int = 0,
+):
+    """This function works alongside dynamically_quantize_per_tensor to obtain a floating point tensor from a quantized tensor
+
+    Args:
+        int_repr (Tensor, int): the integer representation of the quantized tensor being dequantized
+        scales (Tensor, float64): float tensor of scales for each channel
+        zero_points (Tensor, int64): integer tensor for zero point for each channel
+        out_dtype (dtype): desired dtype for output tensor
+        axis (int): the channel axis
+
+    Return:
+        x (Tensor, float): the resulting float tensor with dtype of out_dtype
+    """
+    y = int_repr.transpose(-1, axis)
+    y = y.to(out_dtype)
+    y = y - zero_points
+    y = y * scales.to(out_dtype)
+    y = y.transpose(-1, axis)
+    return y
 
 
 def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:
