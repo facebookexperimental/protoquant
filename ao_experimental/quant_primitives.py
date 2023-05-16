@@ -241,7 +241,7 @@ def quant_int8_matmul(
 
     Assumes weight is quantized symetrically per channel with channel axis 0
 
-    This implementation is written for approximate numerical correctness and things like 
+    This implementation is written for approximate numerical correctness and things like
     aligning accumulation behavior are left for a future PR
 
     Args:
