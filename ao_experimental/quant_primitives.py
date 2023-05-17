@@ -297,10 +297,9 @@ def quant_int8_matmul(
     #
 
     # mm_unscaled has to stay in float32 for the next two lines to prevent overflow
-    mm_unscaled_float32 = XW_float32 - (x_zp * w_int8_t_sums_int64)
-    y = x_scale * w_scales * mm_unscaled_float32
+    mm_unscaled_float32 = XW_int32 - (x_zp * w_int8_t_sums_int64)
     # can downcast only at the very end
-    y = y.to(out_dtype)
+    y = (x_scale * w_scales * mm_unscaled_float32).to(out_dtype)
     return y
 
 
