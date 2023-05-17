@@ -73,7 +73,7 @@ class EndToEndTest(unittest.TestCase):
         )
         if device == "cuda":
             trit_model = torch.compile(q_model, mode="max-autotune")
-        for i in range(5):
+        for _ in range(5):
             x = model.get_example_input().to(device)
             y_ref = model(x)
             y = q_model(x)
