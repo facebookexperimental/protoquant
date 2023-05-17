@@ -1,10 +1,10 @@
+import itertools
+
 import torch
 import torch.utils.benchmark as benchmark
-
-import itertools
-from tabulate import tabulate
-from quant_primitives import quant_int8_matmul, dynamically_quantize_per_tensor
+from quant_primitives import dynamically_quantize_per_tensor, quant_int8_matmul
 from quantized_modules import DynamicallyQuantizedLinear
+from tabulate import tabulate
 
 torch._inductor.config.epilogue_fusion = False
 

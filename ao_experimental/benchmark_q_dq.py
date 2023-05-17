@@ -1,9 +1,9 @@
+import itertools
+
 import torch
 import torch.utils.benchmark as benchmark
-
-import itertools
+from quant_primitives import dequantize_per_tensor, dynamically_quantize_per_tensor
 from tabulate import tabulate
-from quant_primitives import dynamically_quantize_per_tensor, dequantize_per_tensor
 
 
 # taken from https://fburl.com/spo9gm31

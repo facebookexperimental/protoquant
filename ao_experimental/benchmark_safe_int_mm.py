@@ -1,9 +1,9 @@
+import itertools
+
 import torch
 import torch.utils.benchmark as benchmark
-
-import itertools
-from tabulate import tabulate
 from quant_primitives import safe_int_mm
+from tabulate import tabulate
 
 
 # taken from https://fburl.com/spo9gm31
