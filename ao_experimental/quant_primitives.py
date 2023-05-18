@@ -181,6 +181,129 @@ def dequantize_per_channel(
     return y
 
 
+def quant_int8_dynamic_linear(
+    x,
+    x_quant_min,
+    x_quant_max,
+    x_q_dtype,
+    w_int8_t,
+    w_int8_t_sums_int64,
+    w_scales,
+    bias,
+    out_dtype=torch.float32,
+):
+    r"""
+    like torch.ops.quantized.linear_dynamic, this function takes in an fp32 input and a quantized weight
+    and outputs the result of a quantized matmul after dynamically quantizing the input.
+
+    Args:
+        x (Tensor): the input tensor that gets quantized for the quantized matmul
+        x_quant_min (int):
+        x_quant_min (int):
+        x_q_dtype (dtype): the desired integer type to quantize x to (only int8 currently supported)
+        w_int8_t (Tensor int8): the integer representation of the quantized and transposed weight tensor
+            (assumed to be per-channel symmetrically quantized)
+        w_int8_t_sums_int64 (Tensor int64): should be w_int8_t.sum(dim=0).to(torch.int64),
+            we take it as an argument since it can be preprocessed
+        w_scales (Tensor float64): The per-channel quanized scales of w
+        bias (Tensor float): A float tensor that gets added to the matmul result at the end
+        out_dtype (dtype): the desired dtype of the output
+
+    Return:
+        out (Tensor): the resulting tensor with dtype of out_dtype
+    """
+
+    # like F.linear, but with int8 dynamic quantization of activation,
+    # and a quantized weight
+    x_int8, x_scale, x_zp = dynamically_quantize_per_tensor(
+        x, x_quant_min, x_quant_max, x_q_dtype
+    )
+    # w_int8_t_sums_int64 = w_int8_t.sum(dim=0)
+    mm_out = quant_int8_matmul(
+        x_int8, x_scale, x_zp, w_int8_t, w_int8_t_sums_int64, w_scales, out_dtype
+    )
+    if bias is not None:
+        mm_out += bias
+    return mm_out.to(out_dtype)
+
+
+def quant_int8_matmul(
+    x_vals_int8,
+    x_scale,
+    x_zp,
+    w_int8_t,
+    w_int8_t_sums_int64,
+    w_scales,
+    out_dtype=torch.float32,
+):
+    r"""
+    Quantized matmul of int8 operands that accumulates to int32 and returns out_dtype.
+
+    Assumes weight is quantized symetrically per channel with channel axis 0
+
+    This implementation is written for approximate numerical correctness and things like
+    aligning accumulation behavior are left for a future PR
+
+    Args:
+        x_vals_int8 (Tensor): the integer representation of the quantized input tensor (assumed to be per-tensor affine quantized)
+        x_scale (float64): the scale of the quantized input tensor
+        x_zp (int32): the zero_points of the input tensor
+        w_int8_t (Tensor int8): the integer representation of the quantized and transposed weight tensor
+            (assumed to be per-channel symmetrically quantized)
+        w_int8_t_sums_int64 (Tensor int64): should be w_int8_t.sum(dim=0).to(torch.int64),
+            we take it as an argument since it can be preprocessed
+        w_scales (Tensor float64): The per-channel quanized scales of w
+        out_dtype (dtype): the desired dtype of the output
+
+    Return:
+        out (Tensor): the resulting tensor with dtype of out_dtype
+
+    """
+
+    # see
+    # https://github.com/google/gemmlowp/blob/master/doc/quantization.md
+    # for an overview of quantized matmul compute
+
+    # assuming zw == 0, . is matmul, * is element wise mult:
+    # Y = X.W'                                                      # float form
+    #   = ([X_int-xz] * xs) . ( [W_int'] * [ws'])                   # dequantize both
+    #   = (xs * [ws']) * ([X_int . W_int'] - xz * [1_mat . W_int])  # rearrange
+    # note: [1_mat . W_int] is w_int8_t_sums_int64
+    # note: ws is a rank 1 tensor so ws' just indicates aligning it correctly
+
+    assert (
+        x_vals_int8.dtype == torch.int8
+    ), f"x dtype {x_vals_int8.dtype} not yet supported"
+    assert w_int8_t.dtype == torch.int8, f"w dtype {w_int8_t.dtype} not yet supported"
+    # assert w_scales.dtype == out_dtype, \
+    #     f'{w_scales.dtype} does not match {out_dtype}'
+
+    #
+    # 1. calculate [X_int . W_int]
+    #
+
+    tmp = x_vals_int8.reshape(-1, x_vals_int8.shape[-1])
+    XW_int32 = safe_int_mm(tmp, w_int8_t)
+    XW_int32 = XW_int32.reshape(*x_vals_int8.shape[:-1], -1)
+
+    # TODO(future): consider using integer arithmetic throughout, although
+    # TBD if that is actually faster on GPUs
+    # need to use 32 bits here to prevent overflow for large shapes,
+    # 16 bits is not enough
+    XW_float32 = XW_int32.to(torch.float32)
+
+    #
+    # 2. connect it all together
+    #
+
+    # mm_unscaled has to stay in float32 for the next two lines to prevent overflow
+    mm_unscaled_float32 = XW_float32 - (x_zp * w_int8_t_sums_int64)
+    y = x_scale * w_scales * mm_unscaled_float32
+    # can downcast only at the very end
+    y = y.to(out_dtype)
+    return y
+
+
 def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:
     r"""
     This function wraps torch._int_mm and avoids several undesirable behaviors of the function for certain inputs while still
