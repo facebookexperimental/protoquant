@@ -162,12 +162,14 @@ def float8_to_float32(x, flavor):
     else:  # e5m2
         return _hfp8_to_float(x, E5M2_EBITS, E5M2_EXP_BIAS)
 
+@torch.no_grad()
 def amax_to_scale(amax, flavor):
     if flavor == E4M3:
         return E4M3_MAX_POS / torch.clamp(amax, min=EPS)
     else:  # e5m2
         return E5M2_MAX_POS / torch.clamp(amax, min=EPS)
 
+@torch.no_grad()
 def tensor_to_scale(x, flavor):
     amax = torch.max(torch.abs(x))
     return amax_to_scale(amax, flavor)
