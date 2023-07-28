@@ -60,6 +60,7 @@ class Float8Tensor(torch.Tensor):
     def __new__(cls, data, scale, flavor):
         # This is a non-differentiable constructor!
         assert not data.requires_grad
+        assert not scale.requires_grad
         # TODO(future): make bits8 easier to work with and switch to using it
         # assert data.dtype == torch.bits8
         assert scale.dtype == torch.float32
