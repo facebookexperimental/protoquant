@@ -126,7 +126,8 @@ def get_opt_shapes():
         yield (d, f, a)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    global d_model, dim_feedforward
 
     parser = argparse.ArgumentParser()
     parser.add_argument("batchsize")
@@ -178,3 +179,7 @@ if __name__ == "__main__":
                     )
                 )
             )
+
+
+if __name__ == "__main__":
+    main()  # pragma: no cover
