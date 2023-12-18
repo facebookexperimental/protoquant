@@ -1,4 +1,5 @@
 import heapq
+import inspect
 
 import torch
 
@@ -21,14 +22,18 @@ def get_tensorcore_tflops(backend, device, num_ctas, num_warps, dtype):
     """return compute throughput in TOPS"""
     total_warps = num_ctas * min(num_warps, 4)
 
-    num_subcores = (
-        get_device_properties(device)["multiprocessor_count"] * 4
-    )  # on recent GPUs
-    tflops = (
-        min(num_subcores, total_warps)
-        / num_subcores
-        * get_max_tensorcore_tflops(dtype, backend, device)
-    )
+    props = get_device_properties(device)
+    num_subcores = props["multiprocessor_count"] * 4  # on recent
+
+    if inspect.signature(get_max_tensorcore_tflops).parameters.get("clock_rate"):
+        # Triton API change in https://github.com/openai/triton/pull/2293
+        clock_rate = props["sm_clock_rate"]
+        max_tensorcore_tflops = get_max_tensorcore_tflops(
+            dtype, clock_rate=clock_rate, device=device
+        )
+    else:
+        max_tensorcore_tflops = get_max_tensorcore_tflops(dtype, backend, device)
+    tflops = min(num_subcores, total_warps) / num_subcores * max_tensorcore_tflops
     return tflops
 
 
