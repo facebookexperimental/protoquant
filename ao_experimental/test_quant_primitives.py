@@ -240,6 +240,7 @@ class TestPerChannelQuantization(unittest.TestCase):
     r"""
     Tests the dynamically_quantize_per_channel function across a variety of input cases and ensures numerics match ao version
     """
+
     shapes = (
         (1, 200, 200),
         (5, 5),
@@ -331,6 +332,7 @@ class TestPerTensorQuantization(unittest.TestCase):
     r"""
     Tests the dynamically_quantize_per_tensor function across a variety of input cases and ensures numerics match ao version
     """
+
     shapes = (
         (1, 1, 32, 32),
         (32, 16, 64, 64),
@@ -414,6 +416,7 @@ class TestQuantInt8MatMul(unittest.TestCase):
     r"""
     Tests that quant_int8_matmul has good numerical accuracy
     """
+
     shapes = (
         # ((x_shape), (w_shape))
         ((3, 2, 32, 32), (20, 32)),
@@ -485,6 +488,7 @@ class TestQuantInt8DynamicLinearOp(unittest.TestCase):
     r"""
     Tests that quant_int8_dynamic_linear has good numerical accuracy
     """
+
     shapes = (
         # ((x_shape), (w_shape))
         ((3, 2, 32, 32), (20, 32)),
@@ -564,6 +568,7 @@ class TestDynamicallyQuantizedLinear(unittest.TestCase):
     r"""
     Tests that DynamicallyQuantizedlinear has good numerical accuracy
     """
+
     shapes = (
         # ((x_shape), (w_shape))
         ((3, 2, 32, 32), (20, 32)),
@@ -620,6 +625,7 @@ class TestSafeIntMM(unittest.TestCase):
     r"""
     Tests the safe_int_mm functionality/correctness across a variety of input cases
     """
+
     shapes = (
         # ((x_shape), (w_shape))
         ((8, 17), (17, 8)),  # break cublas but not triton (fallback)
