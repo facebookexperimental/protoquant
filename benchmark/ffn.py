@@ -155,6 +155,8 @@ def main() -> None:
     print(",".join(headers))
     bs = int(args.batchsize)
     seq_len = int(args.seq_len)
+    # pyre-fixme[10]: Name `d_model` is used but not defined.
+    # pyre-fixme[10]: Name `dim_feedforward` is used but not defined.
     for d_model, dim_feedforward, annotation in shape_gen():
         for minimize_error in [True, False]:
             with_q = run_benchmark(

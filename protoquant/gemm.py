@@ -13,6 +13,7 @@ def gemm(
     mat2: torch.Tensor,
     input: Optional[torch.Tensor] = None,
     out: Optional[torch.Tensor] = None,
+    # pyre-fixme[7]: Expected `Tensor` but got implicit return value of `None`.
 ) -> torch.Tensor:
     assert (input is None) or (out is None)
 
