@@ -3,7 +3,10 @@ import torch
 import triton
 import triton.language as tl
 
-from triton.ops.matmul_perf_model import early_config_prune, estimate_matmul_time
+from fbgemm_gpu.experimental.gemm.triton_gemm.matmul_perf_model import (
+    early_config_prune,
+    estimate_matmul_time,
+)
 
 
 def init_to_zero(name):
