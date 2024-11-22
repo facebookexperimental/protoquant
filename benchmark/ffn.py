@@ -45,7 +45,7 @@ class FFN(torch.nn.Module):
 
 
 def run_benchmark(
-    use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True
+    use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True, use_int_mm=True,
 ):
     inp = torch.randn(batch_size, seq_len, d_model)
     inp = inp.half().cuda()
@@ -58,8 +58,8 @@ def run_benchmark(
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
-        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
-        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
+        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error, use_int_mm)
+        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error, use_int_mm)
         ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
@@ -145,6 +145,7 @@ def main() -> None:
         "with_q(μs)",
         "without_q(μs)",
         "minimize_error",
+        "use_int_mm",
         "speedup",
     ]
     shape_gen = get_default_shapes
@@ -158,9 +159,9 @@ def main() -> None:
     # pyre-fixme[10]: Name `d_model` is used but not defined.
     # pyre-fixme[10]: Name `dim_feedforward` is used but not defined.
     for d_model, dim_feedforward, annotation in shape_gen():
-        for minimize_error in [True, False]:
+        for (minimize_error, use_int_mm) in itertools.product([True, False], [False]):
             with_q = run_benchmark(
-                True, d_model, dim_feedforward, bs, seq_len, minimize_error
+                True, d_model, dim_feedforward, bs, seq_len, minimize_error, use_int_mm
             )
             without_q = run_benchmark(False, d_model, dim_feedforward, bs, seq_len)
             print(
@@ -176,6 +177,7 @@ def main() -> None:
                             f"{with_q:.0f}",
                             f"{without_q:.0f}",
                             minimize_error,
+                            use_int_mm,
                             f"{without_q / with_q:.2f}",
                         ],
                     )
