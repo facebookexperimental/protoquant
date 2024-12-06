@@ -647,7 +647,7 @@ class TestSafeIntMM(unittest.TestCase):
             y,
             atol=0,
             rtol=0,
-            msg=r"failed for shape {} and {}".format(x.shape, w.shape),
+            msg=rf"failed for shape {x.shape} and {w.shape}",
         )
 
         if x.device.type == "cuda" and w.device.type == "cuda":
@@ -658,7 +658,7 @@ class TestSafeIntMM(unittest.TestCase):
                 y_triton,
                 atol=0,
                 rtol=0,
-                msg=r"failed for shape {} and {}".format(x.shape, w.shape),
+                msg=rf"failed for shape {x.shape} and {w.shape}",
             )
 
     def test_safe_int_mm_cuda(self):

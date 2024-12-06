@@ -135,8 +135,8 @@ def dynamically_quantize_per_channel(
 # reference: https://fburl.com/code/vfsygwd0
 def dequantize_per_tensor(
     int_repr: torch.IntTensor,
-    scale: Union[torch.Tensor, float],
-    zero_point: Union[torch.Tensor, int],
+    scale: torch.Tensor | float,
+    zero_point: torch.Tensor | int,
     out_dtype=torch.float32,
 ):
     """This function works alongside dynamically_quantize_per_tensor to obtain a floating point tensor from a quantized tensor

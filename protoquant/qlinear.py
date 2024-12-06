@@ -6,7 +6,7 @@ from torch.nn.parameter import Parameter
 
 class QLinear(torch.nn.Module):
     def __init__(self, qweight, wparams, bias, minimize_error):
-        super(QLinear, self).__init__()
+        super().__init__()
         assert isinstance(bias, Parameter)
         # Need to store in transposed form due to cuBLAS
         self.qweight = qweight

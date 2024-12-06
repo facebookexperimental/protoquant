@@ -107,7 +107,7 @@ def batchify(data: Tensor, bsz: int, device: str) -> Tensor:
     return data.to(device)
 
 
-def get_batch(source: Tensor, i: int, min_seq_len=35) -> Tuple[Tensor, Tensor]:
+def get_batch(source: Tensor, i: int, min_seq_len=35) -> tuple[Tensor, Tensor]:
     """
     Args:
         source: Tensor, shape [full_seq_len, batch_size]

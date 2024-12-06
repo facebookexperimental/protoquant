@@ -26,7 +26,7 @@ def benchmark_torch_function_in_microseconds(f, *args, **kwargs):
 
 class FFN(torch.nn.Module):
     def __init__(self, d_model, dim_feedforward, device, dtype):
-        super(FFN, self).__init__()
+        super().__init__()
         factory_kwargs = {"device": device, "dtype": dtype}
         self.linear1 = torch.nn.Linear(d_model, dim_feedforward, **factory_kwargs)
         self.activation = torch.nn.functional.relu
@@ -122,8 +122,7 @@ def get_opt_shapes():
         "175B",
     ]
 
-    for d, f, a in zip(d_model, dim_feedforward, annotation):
-        yield (d, f, a)
+    yield from zip(d_model, dim_feedforward, annotation)
 
 
 def main() -> None:

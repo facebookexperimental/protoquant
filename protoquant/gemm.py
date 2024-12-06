@@ -11,8 +11,8 @@ except ImportError:
 def gemm(
     mat1: torch.Tensor,
     mat2: torch.Tensor,
-    input: Optional[torch.Tensor] = None,
-    out: Optional[torch.Tensor] = None,
+    input: torch.Tensor | None = None,
+    out: torch.Tensor | None = None,
     # pyre-fixme[7]: Expected `Tensor` but got implicit return value of `None`.
 ) -> torch.Tensor:
     assert (input is None) or (out is None)

@@ -19,9 +19,9 @@ QParams = namedtuple(
 def qntz(
     input: torch.Tensor,
     is_a: bool,
-    do_pad: Optional[bool] = True,
+    do_pad: bool | None = True,
     minimize_error=True,
-) -> Tuple[torch.Tensor, QParams]:
+) -> tuple[torch.Tensor, QParams]:
     assert input.dim() == 2
 
     dtype = input.dtype
@@ -65,8 +65,8 @@ def qntz(
 def dqntz(
     input: torch.Tensor,
     mat1_params: QParams,
-    mat2_params: Optional[QParams] = None,
-    other: Optional[torch.Tensor] = None,
+    mat2_params: QParams | None = None,
+    other: torch.Tensor | None = None,
 ) -> torch.Tensor:
     assert input.dim() == 2
 
