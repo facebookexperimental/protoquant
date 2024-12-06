@@ -275,9 +275,10 @@ class TestPerChannelQuantization(unittest.TestCase):
                 )
                 obs(x)
                 ref_scales, ref_zero_points = obs.calculate_qparams()
-                ref_scales, ref_zero_points = ref_scales.to(
-                    x.device
-                ), ref_zero_points.to(x.device)
+                ref_scales, ref_zero_points = (
+                    ref_scales.to(x.device),
+                    ref_zero_points.to(x.device),
+                )
                 torch.testing.assert_close(scales.to(torch.float32), ref_scales)
                 torch.testing.assert_close(zero_points, ref_zero_points, atol=0, rtol=0)
 

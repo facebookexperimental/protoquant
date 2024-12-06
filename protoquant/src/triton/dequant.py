@@ -37,7 +37,6 @@ def dequant_kernel(
     mat2_zeros,
     mat2_sums,
 ):
-
     temp = (mat1_zeros * mat2_sums).to(torch.int32)
     temp = temp + (mat1_sums * mat2_zeros).to(torch.int32)
 
@@ -62,9 +61,8 @@ def dequant(
     mat2_rowwise,
     mat2_transpose,
 ):
-
-    assert (mat1_rowwise and not mat1_transpose) and (
-        not mat2_rowwise and mat2_transpose
+    assert (
+        (mat1_rowwise and not mat1_transpose) and (not mat2_rowwise and mat2_transpose)
     ), "Expected mat1 to be quantized rowwise, non-transposed and mat2 to be quantized colwise, transposed!"
     n_rows, n_cols = inputs.shape
 
