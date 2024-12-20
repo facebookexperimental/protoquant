@@ -2,6 +2,8 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 # Owner(s): ["cpuhrsch"]
 
+# pyre-unsafe
+
 import unittest
 
 import numpy
