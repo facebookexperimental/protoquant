@@ -1,7 +1,6 @@
 #include <protoquant/src/gemm/gemm.h>
 #include <protoquant/src/gemm/utilities.h>
 
-#include <ATen/ATen.h>
 #include <ATen/core/op_registration/op_registration.h>
 #include <c10/core/DispatchKey.h>
 #include <torch/library.h>
