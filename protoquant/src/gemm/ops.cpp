@@ -28,12 +28,14 @@ Tensor ngemm_out_cpu(Tensor& out, const Tensor& input, const Tensor& mat2) {
   return mm_out(out, input.to(kInt), mat2.to(kInt).transpose(0, 1));
 }
 
+namespace {
 class PadKernel final : public c10::OperatorKernel {
  public:
   int64_t operator()(const int64_t x) {
     return pad(x);
   }
 };
+} // anonymous namespace
 
 static auto pad_registry = c10::RegisterOperators().op(
     c10::RegisterOperators::options().schema("fb::pad").kernel<PadKernel>(
