@@ -8,7 +8,6 @@ import unittest
 
 import numpy
 import torch
-
 from protoquant import gemm, pad
 
 numpy.random.seed(0)

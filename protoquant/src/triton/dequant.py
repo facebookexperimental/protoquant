@@ -1,7 +1,6 @@
 import contextlib
 
 import torch
-
 import triton
 import triton.language as tl
 from torch._dynamo import optimize
@@ -61,9 +60,11 @@ def dequant(
     mat2_rowwise,
     mat2_transpose,
 ):
-    assert (
-        (mat1_rowwise and not mat1_transpose) and (not mat2_rowwise and mat2_transpose)
-    ), "Expected mat1 to be quantized rowwise, non-transposed and mat2 to be quantized colwise, transposed!"
+    assert (mat1_rowwise and not mat1_transpose) and (
+        not mat2_rowwise and mat2_transpose
+    ), (
+        "Expected mat1 to be quantized rowwise, non-transposed and mat2 to be quantized colwise, transposed!"
+    )
     n_rows, n_cols = inputs.shape
 
     s0 = inputs.size(0)

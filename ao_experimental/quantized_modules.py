@@ -76,12 +76,12 @@ class DynamicallyQuantizedLinear(torch.nn.Module):
         x_q_dtype=torch.int8,
         out_dtype=torch.float32,
     ):
-        assert isinstance(
-            mod, torch.nn.Linear
-        ), f"need mod to be type torch.nn.Linear but got {type(mod)}"
-        assert (
-            w_axis == 0
-        ), f"only weight per-channel quantization axis of 0 currently supported but got {w_axis}"
+        assert isinstance(mod, torch.nn.Linear), (
+            f"need mod to be type torch.nn.Linear but got {type(mod)}"
+        )
+        assert w_axis == 0, (
+            f"only weight per-channel quantization axis of 0 currently supported but got {w_axis}"
+        )
         w_int8, w_scales, _ = dynamically_quantize_per_channel(
             mod.weight,
             quant_min=w_quant_min,

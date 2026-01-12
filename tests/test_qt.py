@@ -7,7 +7,6 @@
 import unittest
 
 import protoquant
-
 import torch
 
 m = k = n = 2

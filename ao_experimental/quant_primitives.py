@@ -271,9 +271,9 @@ def quant_int8_matmul(
     # note: [1_mat . W_int] is w_int8_t_sums_int64
     # note: ws is a rank 1 tensor so ws' just indicates aligning it correctly
 
-    assert (
-        x_vals_int8.dtype == torch.int8
-    ), f"x dtype {x_vals_int8.dtype} not yet supported"
+    assert x_vals_int8.dtype == torch.int8, (
+        f"x dtype {x_vals_int8.dtype} not yet supported"
+    )
     assert w_int8_t.dtype == torch.int8, f"w dtype {w_int8_t.dtype} not yet supported"
     # assert w_scales.dtype == out_dtype, \
     #     f'{w_scales.dtype} does not match {out_dtype}'
@@ -327,9 +327,9 @@ def safe_int_mm(input: torch.Tensor, mat2: torch.Tensor) -> torch.Tensor:
         return torch._int_mm(input, mat2)
 
     # error checking for cublas path
-    assert (
-        mat2.device == input.device
-    ), f"need both tensors to be on the same device but got {mat2.device} and {input.device}"
+    assert mat2.device == input.device, (
+        f"need both tensors to be on the same device but got {mat2.device} and {input.device}"
+    )
     device_cpu = "cpu" in [mat2.device.type, input.device.type]
     # with input.shape = [i,j] and mat2.shape = [j,k]
     i_is_strictly_greater_than_16 = input.shape[0] > 16

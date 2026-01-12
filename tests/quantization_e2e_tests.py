@@ -8,7 +8,6 @@ import unittest
 
 import numpy
 import torch
-
 from protoquant import dqntz, qntz
 
 

@@ -6,9 +6,7 @@ import time
 from functools import partial
 
 import protoquant
-
 import torch
-
 import torch.utils.benchmark as benchmark
 
 
