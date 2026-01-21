@@ -43,7 +43,7 @@ class FFN(torch.nn.Module):
 
 
 def run_benchmark(
-    use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True
+    use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True, use_w8a16=True,
 ):
     inp = torch.randn(batch_size, seq_len, d_model)
     inp = inp.half().cuda()
@@ -56,9 +56,13 @@ def run_benchmark(
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
-        ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
-        ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
-        ffn = torch.compile(ffn, options={"max-autotune": True})
+        if use_w8a16:
+            ffn.linear1 = protoquant.w8a16_qlinear_from_linear(ffn.linear1, minimize_error)
+            ffn.linear2 = protoquant.w8a16_qlinear_from_linear(ffn.linear2, minimize_error)
+        else:
+            ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
+            ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
+            ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
         torch.testing.assert_close(fp16_ref, fp8_ref, atol=3e-2, rtol=3e-2)
     return benchmark_torch_function_in_microseconds(ffn, inp)
