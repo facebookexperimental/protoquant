@@ -2,9 +2,7 @@ import contextlib
 
 import torch
 import triton.language as tl
-from torch._dynamo import optimize
 from torch._inductor import compile_fx
-from torch.fx.experimental.proxy_tensor import make_fx
 
 
 @contextlib.contextmanager
