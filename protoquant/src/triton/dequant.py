@@ -1,11 +1,9 @@
 import contextlib
 
 import torch
-import triton
 import triton.language as tl
 from torch._dynamo import optimize
 from torch._inductor import compile_fx
-from torch._inductor.decomposition import decompositions
 from torch.fx.experimental.proxy_tensor import make_fx
 
 
