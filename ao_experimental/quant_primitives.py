@@ -1,5 +1,3 @@
-from typing import Union
-
 import torch
 from torch._dynamo import is_compiling as dynamo_is_compiling
 
