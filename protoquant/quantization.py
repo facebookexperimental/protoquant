@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 import triton
