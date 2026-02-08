@@ -1,9 +1,7 @@
 import argparse
 import csv
 import itertools
-import sys
 import time
-from functools import partial
 
 import protoquant
 import torch
