@@ -1,9 +1,8 @@
 import copy
 import logging
-import math
 import platform
 import time
-from typing import Optional, Tuple
+from typing import Tuple
 
 import protoquant
 import torch
