@@ -10,6 +10,7 @@ import numpy
 import torch
 from protoquant import gemm, pad
 
+# pyrefly: ignore [bad-argument-type]
 numpy.random.seed(0)
 torch.manual_seed(0)
 

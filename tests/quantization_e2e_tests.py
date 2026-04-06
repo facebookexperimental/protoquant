@@ -24,6 +24,7 @@ class QUANTIZATION_E2E_CUDA_TESTS(unittest.TestCase):
     device = "cuda"
 
     def qntz_dqntz_e2e_cuda(self, is_a, do_pad, dtype, m, n, max_rtol_95=0.01):
+        # pyrefly: ignore [bad-argument-type]
         numpy.random.seed(0)
         torch.manual_seed(0)
 
@@ -89,6 +90,7 @@ class QUANTIZATION_E2E_CUDA_TESTS(unittest.TestCase):
         self.qntz_dqntz_e2e_cuda(is_a, do_pad, torch.float64, 4, 4)
 
     def _test_qntz_mm_dqntz_e2e_cuda(self, dtype, m, k, n):
+        # pyrefly: ignore [bad-argument-type]
         numpy.random.seed(0)
         torch.manual_seed(0)
 
@@ -124,6 +126,7 @@ class QUANTIZATION_E2E_CUDA_TESTS(unittest.TestCase):
         self._test_qntz_mm_dqntz_e2e_cuda(torch.float64, 2, 2, 3)
 
     def _test_qntz_mm_dqntz_add_e2e_cuda(self, dtype, m, k, n):
+        # pyrefly: ignore [bad-argument-type]
         numpy.random.seed(0)
         torch.manual_seed(0)
 

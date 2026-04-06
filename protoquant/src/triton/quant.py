@@ -82,6 +82,7 @@ def quant_kernel(
     #                        -SMALL_SCALE_THRESHOLD * (qmax_val - qmin_val), row_min_val)
 
     if minimize_error:
+        # pyrefly: ignore [unbound-name]
         row_max_val = row_max_val_amplified
     row_min_val = row_min_val_amplified
 

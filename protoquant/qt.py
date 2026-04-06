@@ -20,10 +20,13 @@ class QTensor(torch.Tensor):
         custom_shape=None,
     ):
         kwargs = {}
+        # pyrefly: ignore [missing-attribute]
         kwargs["device"] = qntzd.device if wrapped_data is None else wrapped_data.device
         kwargs["dtype"] = wrapped_data.dtype if custom_dtype is None else custom_dtype
+        # pyrefly: ignore [missing-attribute]
         kwargs["layout"] = qntzd.layout if wrapped_data is None else wrapped_data.layout
         kwargs["requires_grad"] = (
+            # pyrefly: ignore [missing-attribute]
             qntzd.requires_grad if wrapped_data is None else wrapped_data.requires_grad
         )
         return torch.Tensor._make_wrapper_subclass(
@@ -50,6 +53,7 @@ class QTensor(torch.Tensor):
         self.custom_dtype = custom_dtype
         self.custom_shape = custom_shape
 
+    # pyrefly: ignore [bad-override]
     def __repr__(self):
         return f"QTensor(shape={self.wrapped_data.shape}, data={self.wrapped_data})"
 
@@ -68,9 +72,11 @@ class QTensor(torch.Tensor):
         self.wrapped_data = None
         return self
 
+    # pyrefly: ignore [bad-override]
     __torch_function__ = torch._C._disabled_torch_function_impl
 
     @classmethod
+    # pyrefly: ignore [bad-override]
     def __torch_dispatch__(cls, func, types, args, kwargs):
         # two scenarios where we currently fall back to vanilla mm:
         # 1 - when tensor is on CPU: we are missing qmm for CPU, but we should have a CPU implementation
@@ -114,8 +120,10 @@ class QTensor(torch.Tensor):
 
             # Pass the integer matrices to matrix multiple, the dequant args to dequantize
             # aways return dequantized results for now
+            # pyrefly: ignore [bad-argument-type]
             qntzd = gemm(qinp, qweight)
 
+            # pyrefly: ignore [bad-argument-type]
             out = dqntz(qntzd, iparams, wparams)
             return out
 
@@ -149,7 +157,9 @@ class QTensor(torch.Tensor):
                 else qntz(weight, is_a=False)
             )
 
+            # pyrefly: ignore [bad-argument-type]
             d = gemm(qinp, qweight)
+            # pyrefly: ignore [bad-argument-type]
             ret = dqntz(d, iparams, wparams, bias)
             return ret
 

@@ -54,7 +54,9 @@ def run_benchmark(
     ffn = ffn.half().cuda().eval()
     fp16_ref = ffn(inp).detach().clone().float()
     if use_q:
+        # pyrefly: ignore [bad-assignment]
         ffn.linear1 = protoquant.qlinear_from_linear(ffn.linear1, minimize_error)
+        # pyrefly: ignore [bad-assignment]
         ffn.linear2 = protoquant.qlinear_from_linear(ffn.linear2, minimize_error)
         ffn = torch.compile(ffn, options={"max-autotune": True})
         fp8_ref = ffn(inp).detach().clone().float()
@@ -122,6 +124,7 @@ def get_opt_shapes():
 
 
 def main() -> None:
+    # pyrefly: ignore [unknown-name]
     global d_model, dim_feedforward
 
     parser = argparse.ArgumentParser()
