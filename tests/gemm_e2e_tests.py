@@ -22,7 +22,7 @@ torch.manual_seed(0)
 class GEMM_E2E_CUDA_TESTS(unittest.TestCase):
     device, iterations, max_size = "cuda", 10, 100
 
-    def test_gemm_e2e_cuda(self):
+    def test_gemm_e2e_cuda(self) -> None:
         for _ in range(self.iterations):
             m = pad(numpy.random.randint(low=1, high=self.max_size))
             k = pad(numpy.random.randint(low=1, high=self.max_size))
@@ -55,7 +55,7 @@ class GEMM_E2E_CUDA_TESTS(unittest.TestCase):
             torch.testing.assert_close(mat2.cpu(), mat2_copy)
             torch.testing.assert_close(out.cpu(), out_copy)
 
-    def test_gemm_out_e2e_cuda(self):
+    def test_gemm_out_e2e_cuda(self) -> None:
         for _ in range(self.iterations):
             m = pad(numpy.random.randint(low=1, high=self.max_size))
             k = pad(numpy.random.randint(low=1, high=self.max_size))
@@ -87,7 +87,7 @@ class GEMM_E2E_CUDA_TESTS(unittest.TestCase):
             torch.testing.assert_close(mat2.cpu(), mat2_copy)
             torch.testing.assert_close(out.cpu(), out_copy)
 
-    def test_ngemm_e2e_cuda(self):
+    def test_ngemm_e2e_cuda(self) -> None:
         for _ in range(self.iterations):
             m = pad(numpy.random.randint(low=1, high=self.max_size))
             k = pad(numpy.random.randint(low=1, high=self.max_size))
