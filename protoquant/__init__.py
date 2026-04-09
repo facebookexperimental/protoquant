@@ -1,3 +1,4 @@
+# pyre-strict
 from .extension import _load_library
 from .gemm import gemm, pad
 from .qlinear import qlinear_from_linear
