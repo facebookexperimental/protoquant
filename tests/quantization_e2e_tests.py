@@ -77,7 +77,7 @@ class QUANTIZATION_E2E_CUDA_TESTS(unittest.TestCase):
         is_a, do_pad = False, True
         self.qntz_dqntz_e2e_cuda(is_a, do_pad, torch.float64, 4, 4, 0.013)
 
-    def test_qntz_dqntz_is_a_do_pad_e2e_cuda_float16(self):
+    def test_qntz_dqntz_is_a_do_pad_e2e_cuda_float16(self) -> None:
         is_a, do_pad = True, True
         self.qntz_dqntz_e2e_cuda(is_a, do_pad, torch.float16, 4, 4, 0.025)
 
@@ -156,7 +156,7 @@ class QUANTIZATION_E2E_CUDA_TESTS(unittest.TestCase):
         self._test_qntz_mm_dqntz_add_e2e_cuda(torch.float16, 1, 2, 1)
         self._test_qntz_mm_dqntz_add_e2e_cuda(torch.float16, 2, 2, 3)
 
-    def test_qntz_mm_dqntz_add_e2e_cuda_float32(self):
+    def test_qntz_mm_dqntz_add_e2e_cuda_float32(self) -> None:
         self._test_qntz_mm_dqntz_add_e2e_cuda(torch.float32, 1, 2, 1)
         self._test_qntz_mm_dqntz_add_e2e_cuda(torch.float32, 2, 2, 3)
 
