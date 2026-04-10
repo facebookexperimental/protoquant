@@ -18,7 +18,7 @@ DEVICE = "cuda"
     not torch.cuda.is_available(),
     "test_qt_mm requires available CUDA device, none found.",
 )
-def test_qt_mm(input_dtype=torch.float16):
+def test_qt_mm(input_dtype: torch.dtype = torch.float16) -> None:
     mat1 = torch.randn(m, k, device=DEVICE, dtype=input_dtype)
     qmat1 = protoquant.QTensor(mat1)
     mat2 = torch.randn(k, n, device=DEVICE, dtype=input_dtype)
@@ -31,7 +31,7 @@ def test_qt_mm(input_dtype=torch.float16):
 
 
 class TestQT(unittest.TestCase):
-    def test_qt(self):
+    def test_qt(self) -> None:
         test_qt_mm()
 
 
