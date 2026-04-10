@@ -2,7 +2,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary
 # Owner(s): ["cpuhrsch"]
 
-# pyre-unsafe
+# pyre-strict
 
 import unittest
 
@@ -14,8 +14,11 @@ m = k = n = 2
 DEVICE = "cuda"
 
 
+_skip_no_cuda: bool = not torch.cuda.is_available()
+
+
 @unittest.skipIf(
-    not torch.cuda.is_available(),
+    _skip_no_cuda,
     "test_qt_mm requires available CUDA device, none found.",
 )
 def test_qt_mm(input_dtype: torch.dtype = torch.float16) -> None:
