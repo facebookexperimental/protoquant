@@ -1,11 +1,17 @@
 import torch
-from protoquant.quantization import dqntz, qntz
+from protoquant.quantization import dqntz, qntz, QParams
 from protoquant.src.triton.matmul import matmul as matmul_int8
 from torch.nn.parameter import Parameter
 
 
 class QLinear(torch.nn.Module):
-    def __init__(self, qweight, wparams, bias, minimize_error):
+    def __init__(
+        self,
+        qweight: torch.Tensor,
+        wparams: QParams,
+        bias: Parameter,
+        minimize_error: bool,
+    ) -> None:
         super().__init__()
         assert isinstance(bias, Parameter)
         # Need to store in transposed form due to cuBLAS
@@ -36,7 +42,7 @@ class QLinear(torch.nn.Module):
 
 
 def qlinear_from_linear(
-    linear: torch.nn.Module, minimize_error=True
+    linear: torch.nn.Module, minimize_error: bool = True
 ) -> torch.nn.Module:
     import protoquant
 
