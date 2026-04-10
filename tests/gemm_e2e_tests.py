@@ -2,7 +2,7 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 # Owner(s): ["cpuhrsch"]
 
-# pyre-unsafe
+# pyre-strict
 
 import unittest
 
