@@ -1,8 +1,6 @@
 from collections import namedtuple
-from typing import Tuple
 
 import torch
-import triton
 from protoquant import pad
 
 from .src.triton.dequant import dequant
