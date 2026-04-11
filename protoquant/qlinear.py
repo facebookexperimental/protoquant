@@ -1,6 +1,5 @@
 import torch
 from protoquant.quantization import dqntz, qntz, QParams
-from protoquant.src.triton.matmul import matmul as matmul_int8
 from torch.nn.parameter import Parameter
 
 
