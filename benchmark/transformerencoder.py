@@ -1,14 +1,9 @@
-import logging
 import platform
-import time
-from typing import Tuple
 
 import protoquant
 import torch
-import torch.nn.functional as F
 from torch import nn, Tensor
-from torch._dynamo import config
-from torch.backends.cuda import sdp_kernel, SDPBackend
+from torch.backends.cuda import SDPBackend
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
 
