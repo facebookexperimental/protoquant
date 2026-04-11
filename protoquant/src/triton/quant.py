@@ -1,8 +1,6 @@
 import contextlib
 
 import torch
-from torch._inductor import compile_fx
-from torch.fx.experimental.proxy_tensor import make_fx
 
 
 @contextlib.contextmanager
