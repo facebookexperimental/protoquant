@@ -2,6 +2,7 @@ import argparse
 import csv
 import itertools
 import time
+from typing import Generator
 
 import protoquant
 import torch
@@ -28,7 +29,7 @@ class FFN(torch.nn.Module):
         self.activation = torch.nn.functional.relu
         self.linear2 = torch.nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.linear1(x)
         x = self.activation(x)
         return self.linear2(x)
@@ -86,7 +87,7 @@ def get_big_shapes():
         yield (d_model, dim_feedforward, f"big_opt{i}")
 
 
-def get_opt_shapes():
+def get_opt_shapes() -> Generator[tuple[int, int, str], None, None]:
     d_model = [
         1536,
         2048,
