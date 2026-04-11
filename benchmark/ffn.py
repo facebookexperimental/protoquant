@@ -1,7 +1,5 @@
 import argparse
-import csv
 import itertools
-import time
 from typing import Generator
 
 import protoquant
