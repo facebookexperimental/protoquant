@@ -1,8 +1,6 @@
 import contextlib
 
 import torch
-import triton.language as tl
-from torch._inductor import compile_fx
 
 
 @contextlib.contextmanager
