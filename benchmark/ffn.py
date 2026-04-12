@@ -40,8 +40,13 @@ class FFN(torch.nn.Module):
 
 
 def run_benchmark(
-    use_q, d_model, dim_feedforward, batch_size, seq_len, minimize_error=True
-):
+    use_q: bool,
+    d_model: int,
+    dim_feedforward: int,
+    batch_size: int,
+    seq_len: int,
+    minimize_error: bool = True,
+) -> float:
     inp = torch.randn(batch_size, seq_len, d_model)
     inp = inp.half().cuda()
     ffn = FFN(
@@ -63,7 +68,7 @@ def run_benchmark(
     return benchmark_torch_function_in_microseconds(ffn, inp)
 
 
-def get_default_shapes():
+def get_default_shapes() -> Generator[tuple[int, int, str], None, None]:
     for i, (d_model, dim_feedforward) in enumerate(
         itertools.product([1024, 2048, 4096, 8192], [1024, 2048, 4096, 8192])
     ):
