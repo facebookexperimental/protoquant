@@ -1,3 +1,5 @@
+# pyre-strict
+
 import torch
 
 try:
