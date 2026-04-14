@@ -9,6 +9,7 @@
 # pyre-ignore-all-errors
 import functools
 import heapq
+from typing import Any
 
 import torch
 from triton import cdiv
@@ -47,7 +48,9 @@ def get_tensorcore_tflops(device, num_ctas, num_warps, dtype):
     return tflops
 
 
-def get_simd_tflops(device, num_ctas, num_warps, dtype):
+def get_simd_tflops(
+    device: int, num_ctas: int, num_warps: int, dtype: torch.dtype
+) -> float:
     """return compute throughput in TOPS"""
     total_warps = num_ctas * min(num_warps, 4)
     num_subcores = (
@@ -150,7 +153,9 @@ def estimate_matmul_time(
     return total_time_ms
 
 
-def early_config_prune(configs, named_args, **kwargs):
+def early_config_prune(
+    configs: list[Any], named_args: dict[str, Any], **kwargs: Any
+) -> list[Any]:
     device = torch.cuda.current_device()
     capability = torch.cuda.get_device_capability()
     # BLOCK_M, BLOCK_N, BLOCK_K, SPLIT_K, num_warps, num_stages
