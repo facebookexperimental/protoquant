@@ -16,7 +16,7 @@ def qntz(
     input: torch.Tensor,
     is_a: bool,
     do_pad: bool | None = True,
-    minimize_error=True,
+    minimize_error: bool = True,
 ) -> tuple[torch.Tensor, QParams]:
     assert input.dim() == 2
 
